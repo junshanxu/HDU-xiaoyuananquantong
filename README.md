@@ -7,7 +7,7 @@
 
 ## 安装
 
-Python 3.6+，无需任何第三方依赖，纯标准库实现。
+Python 3.6+，无任何第三方依赖，纯标准库实现。
 
 ```bash
 git clone https://github.com/yuaiccc/HDU-xiaoyuananquantong.git
@@ -45,9 +45,6 @@ python3 server.py
 
 `ah` 是会话 token，过期后接口返回 `code:303`。重新登录平台，从 URL 复制新 `ah`：
 
-```bash
-python3 xy_auto.py --exam --exam-type 2 --yes --ah 新的token
-```
 ##  原理
 
 平台是纯明文 HTTP 接口 😓，无加密、无签名、无防重放：
