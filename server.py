@@ -4,7 +4,7 @@
 校园安全通 Web 后台 - 本地 HTTP 服务（零依赖，纯标准库）
 
 运行: python3 server.py
-浏览器打开: http://localhost:8080
+浏览器打开: http://localhost:8090
 粘贴平台链接即可一键答题。
 """
 import json
@@ -20,12 +20,14 @@ from urllib.parse import urlparse, parse_qs
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import xy_auto as xy
 
-HOST = "0.0.0.0"
+HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8090"))
 WEB_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 全局任务存储: {taskId: {queue, status, mode}}
 tasks = {}
+tasks_lock = threading.Lock()
+VALID_MODES = {"certificate", "chapter", "learn_all", "exam_mock", "exam_official"}
 
 
 class Cfg:
@@ -35,6 +37,7 @@ class Cfg:
             user_id="", college_id="", ah="", course_type="1", exam_class="10",
             course_id=None, force=False, dry_run=False, delay=0.5,
             max_retry=10, retry_exam=False, max_exam_retry=30,
+            cancel_event=None,
         )
         defaults.update(kw)
         self.__dict__.update(defaults)
@@ -71,19 +74,46 @@ def run_task(task_id, cfg, mode):
     sys.stdout = writer
     try:
         q.put(f"题库已加载 {len(bank)} 题")
-        if mode == "chapter":
-            xy.run_courses(s, cfg, bank)
+        if mode == "certificate":
+            q.put("步骤 1/3：完成未完成的课程章节")
+            _, _, failed = xy.run_courses(s, cfg, bank)
+            if failed:
+                q.put("[!] 存在未完成的章节，已停止后续考试")
+                t["status"] = "failed"
+            elif not cfg.cancel_event.is_set():
+                if cfg.college_id == xy.DEFAULT_COLLEGE_ID:
+                    q.put("步骤 2/3：已识别杭电账号，直接使用内置题库")
+                else:
+                    q.put("步骤 2/3：非杭电账号，先通过模拟考试补充题库")
+                    if not xy.do_learn_all(s, cfg, bank, "1"):
+                        t["status"] = "failed"
+                if t["status"] == "running" and not cfg.cancel_event.is_set():
+                    q.put("步骤 3/3：参加正式考试并获取证书")
+                    ok = xy.do_exam(s, cfg, bank, "2")
+                    q.put(f"一键答题结果: {'✅ 已通过' if ok else '❌ 未通过'}")
+                    if not ok:
+                        t["status"] = "failed"
+        elif mode == "chapter":
+            _, _, failed = xy.run_courses(s, cfg, bank)
+            if failed:
+                t["status"] = "failed"
         elif mode == "learn_all":
-            xy.do_learn_all(s, cfg, bank, "1")
+            if not xy.do_learn_all(s, cfg, bank, "1"):
+                t["status"] = "failed"
         elif mode == "exam_mock":
             ok = xy.do_exam(s, cfg, bank, "1")
             q.put(f"模拟考结果: {'✅ 通过' if ok else '❌ 未通过'}")
+            if not ok:
+                t["status"] = "failed"
         elif mode == "exam_official":
             ok = xy.do_exam(s, cfg, bank, "2")
             q.put(f"正式考结果: {'✅ 通过' if ok else '❌ 未通过'}")
-        else:
-            q.put(f"[!] 未知模式: {mode}")
-        t["status"] = "done"
+            if not ok:
+                t["status"] = "failed"
+        if cfg.cancel_event.is_set():
+            t["status"] = "stopped"
+        elif t["status"] == "running":
+            t["status"] = "done"
     except Exception as e:
         t["status"] = "error"
         q.put(f"[错误] {e}")
@@ -93,10 +123,18 @@ def run_task(task_id, cfg, mode):
 
 
 def parse_params(url):
-    q = parse_qs(urlparse(url).query)
+    """兼容普通 query、SPA hash query，以及复制出的 &amp; 链接。"""
+    parsed = urlparse(url.strip().replace("&amp;", "&"))
+    chunks = [parsed.query]
+    if parsed.fragment:
+        chunks.append(parsed.fragment.split("?", 1)[-1])
+    q = {}
+    for chunk in chunks:
+        for key, values in parse_qs(chunk, keep_blank_values=True).items():
+            q.setdefault(key.lower(), values)
     return {
-        "userId": q.get("userId", [""])[0],
-        "collegeId": q.get("collegeId", [""])[0],
+        "userId": q.get("userid", [""])[0],
+        "collegeId": q.get("collegeid", [""])[0],
         "ah": q.get("ah", [""])[0],
     }
 
@@ -146,40 +184,62 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return self._send_json(400, {"error": "无效 JSON"})
         if p == "/api/parse":
-            url = body.get("url", "").strip()
+            url = str(body.get("url") or "").strip()
             if not url:
                 return self._send_json(400, {"error": "缺少 url"})
-            return self._send_json(200, parse_params(url))
+            params = parse_params(url)
+            missing = [k for k, v in params.items() if not v]
+            if missing:
+                return self._send_json(400, {"error": "链接缺少参数：" + " / ".join(missing)})
+            return self._send_json(200, params)
         if p == "/api/start":
             return self._start(body)
         if p.startswith("/api/stop/"):
             tid = p.rsplit("/", 1)[-1]
             t = tasks.get(tid)
-            if t:
-                t["status"] = "stopped"
-                t["queue"].put("[已请求停止]")
-                t["queue"].put(None)
+            if t and t["status"] in ("pending", "running"):
+                t["cancel_event"].set()
+                t["queue"].put("[已请求停止，当前请求结束后将不再提交]")
             return self._send_json(200, {"ok": True})
         self._send_json(404, {"error": "not found"})
 
     def _start(self, body):
-        ah = body.get("ah", "").strip()
-        user_id = body.get("userId", "").strip()
-        college_id = body.get("collegeId", "").strip()
-        mode = body.get("mode", "chapter")
+        params = parse_params(str(body.get("url", ""))) if body.get("url") else {}
+        ah = str(params.get("ah") or body.get("ah") or "").strip()
+        user_id = str(params.get("userId") or body.get("userId") or "").strip()
+        college_id = str(params.get("collegeId") or body.get("collegeId") or "").strip()
+        mode = body.get("mode", "certificate")
         if not ah or not user_id or not college_id:
             return self._send_json(400, {"error": "参数不全：需要 userId / collegeId / ah"})
+        if mode not in VALID_MODES:
+            return self._send_json(400, {"error": "无效答题模式"})
+        try:
+            max_retry = max(1, min(int(body.get("maxRetry", 10)), 50))
+            max_exam_retry = max(1, min(int(body.get("maxExamRetry", 30)), 100))
+        except (TypeError, ValueError):
+            return self._send_json(400, {"error": "重试次数必须是整数"})
+        cancel_event = threading.Event()
         cfg = Cfg(
             user_id=user_id, college_id=college_id, ah=ah,
-            force=bool(body.get("force")),
-            retry_exam=bool(body.get("retryExam")),
-            max_retry=int(body.get("maxRetry", 10)),
-            max_exam_retry=int(body.get("maxExamRetry", 30)),
+            force=False,
+            retry_exam=True,
+            max_retry=max_retry,
+            max_exam_retry=max_exam_retry,
+            cancel_event=cancel_event,
         )
         tid = uuid.uuid4().hex[:12]
-        tasks[tid] = {"queue": queue.Queue(), "status": "pending", "mode": mode}
+        with tasks_lock:
+            if any(t["status"] in ("pending", "running") for t in tasks.values()):
+                return self._send_json(409, {"error": "已有答题任务运行中，请等待完成或先停止"})
+            tasks[tid] = {
+                "queue": queue.Queue(), "status": "pending", "mode": mode,
+                "cancel_event": cancel_event,
+            }
         threading.Thread(target=run_task, args=(tid, cfg, mode), daemon=True).start()
-        self._send_json(200, {"taskId": tid})
+        self._send_json(200, {
+            "taskId": tid,
+            "params": {"userId": user_id, "collegeId": college_id, "ah": ah},
+        })
 
     def _stream(self, tid):
         t = tasks.get(tid)
@@ -212,7 +272,10 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     print(f"校园安全通答题服务已启动: http://localhost:{PORT}")
     print("浏览器打开上面网址，粘贴平台链接即可一键答题。Ctrl+C 停止。")
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    try:
+        ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    except KeyboardInterrupt:
+        print("\n服务已停止")
 
 
 if __name__ == "__main__":

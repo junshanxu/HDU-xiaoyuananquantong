@@ -206,6 +206,20 @@ def learn_from_wrong(s, cfg, log_id, bank):
     return learned
 
 
+def _cancelled(cfg):
+    event = getattr(cfg, "cancel_event", None)
+    return bool(event and event.is_set())
+
+
+def _pause(cfg):
+    """可被 Web 停止按钮打断的请求间隔；CLI 下保持原行为。"""
+    event = getattr(cfg, "cancel_event", None)
+    if event:
+        event.wait(cfg.delay)
+    else:
+        time.sleep(cfg.delay)
+
+
 def do_article(s, cfg, bank, article_id, title):
     print(f"\n  ▸ 文章[{title}]  id={article_id}")
 
@@ -223,6 +237,9 @@ def do_article(s, cfg, bank, article_id, title):
         return True
 
     for attempt in range(1, cfg.max_retry + 1):
+        if _cancelled(cfg):
+            print("    [停止] 已取消，不再提交")
+            return False
         qdata = api_question_list(s, cfg, article_id)
         if qdata.get("code") != 200:
             print(f"    [!] 取题失败: {qdata.get('message') or qdata}")
@@ -233,6 +250,9 @@ def do_article(s, cfg, bank, article_id, title):
             return True
 
         answers, miss = solve(questions, bank)
+        if _cancelled(cfg):
+            print("    [停止] 已取消，不再提交")
+            return False
         result = api_unit_test(s, cfg, article_id, title, questions, answers)
 
         if result.get("code") != 200:
@@ -258,7 +278,7 @@ def do_article(s, cfg, bank, article_id, title):
             # 题库全命中却仍错：可能多选/判断格式或匹配有误，避免空转
             print("    [!] 题库已全命中但未通过，可能答案格式异常，停止该篇以排查")
             return False
-        time.sleep(cfg.delay)
+        _pause(cfg)
 
     print(f"    [!] 达到最大重试次数 {cfg.max_retry}，放弃该篇")
     return False
@@ -342,6 +362,9 @@ def do_exam(s, cfg, bank, exam_type):
     max_try = min(last_num, cfg.max_exam_retry) if allow_retry else 1
 
     for attempt in range(1, max_try + 1):
+        if _cancelled(cfg):
+            print("    [停止] 已取消，不再创建或提交考卷")
+            return False
         print(f"\n  ▸ 第 {attempt}/{max_try} 次考试")
         cre = api_test_create(s, cfg, exam_id)
         if cre.get("code") != 200:
@@ -363,6 +386,9 @@ def do_exam(s, cfg, bank, exam_type):
         print(f"    共 {len(questions)} 题，题库命中 {hit} 题")
         answers, miss = solve(questions, bank)
 
+        if _cancelled(cfg):
+            print("    [停止] 已取消，不再提交考卷")
+            return False
         result = api_imitate_test(s, cfg, exam_id, str(exam_type), log_id, questions, answers)
         if result.get("code") not in (200, "200"):
             print(f"    [!] 提交异常: {result.get('message') or result}")
@@ -382,7 +408,7 @@ def do_exam(s, cfg, bank, exam_type):
         if not allow_retry or attempt >= max_try:
             print(f"    [!] 停止。剩余考试次数 {last_num - attempt}")
             return False
-        time.sleep(cfg.delay)
+        _pause(cfg)
     return False
 
 
@@ -391,17 +417,20 @@ def do_learn_all(s, cfg, bank, exam_type):
     比正常刷题(只学猜错的)快几十倍，几轮即可覆盖整个题库。"""
     info = api_test_get_test(s, cfg, exam_type)
     if info.get("code") != 200:
-        print(f"获取考试信息失败: {info.get('message') or info}"); return
+        print(f"获取考试信息失败: {info.get('message') or info}"); return False
     d = info.get("data") or {}
     exam_id = d.get("id", "")
     print(f"\n=== 快速学习模式: {d.get('name')}  (题库现有 {len(bank)} 题) ===")
     if cfg.dry_run:
-        print("    (dry-run) 不创建考卷"); return
+        print("    (dry-run) 不创建考卷"); return True
     empty, total = 0, 0
     for attempt in range(1, cfg.max_exam_retry + 1):
+        if _cancelled(cfg):
+            print("  [停止] 已取消，不再创建或提交考卷")
+            return False
         cre = api_test_create(s, cfg, exam_id)
         if cre.get("code") != 200:
-            print(f"  第{attempt}轮创建考卷失败: {cre.get('message')}"); break
+            print(f"  第{attempt}轮创建考卷失败: {cre.get('message')}"); return False
         log_id = (cre.get("data") or {}).get("logId", "")
         qdata = api_test_list(s, cfg, log_id)
         qs = _extract_questions(qdata)
@@ -409,6 +438,9 @@ def do_learn_all(s, cfg, bank, exam_type):
             print(f"  第{attempt}轮无题目"); continue
         # 全部提交无效答案(单选/多选 Z、判断 9)，确保每题都错 -> 触发错题回传全部正确答案
         answers = {q["id"]: ("9" if _qtype(q) == "3" else "Z") for q in qs}
+        if _cancelled(cfg):
+            print("  [停止] 已取消，不再提交考卷")
+            return False
         api_imitate_test(s, cfg, exam_id, str(exam_type), log_id, qs, answers)
         learned = learn_from_wrong(s, cfg, log_id, bank)
         total += learned
@@ -420,8 +452,9 @@ def do_learn_all(s, cfg, bank, exam_type):
                 print("  ✓ 连续 2 轮无新题，题库已覆盖完成"); break
         else:
             empty = 0
-        time.sleep(cfg.delay)
+        _pause(cfg)
     print(f"学习结束：本轮共学 {total} 题，题库累计 {len(bank)} 题  (文件: {BANK_FILE})")
+    return True
 
 
 def run_courses(s, cfg, bank):
@@ -431,7 +464,7 @@ def run_courses(s, cfg, bank):
         print(f"\n获取课程列表失败: {cl.get('message') or cl}")
         print("提示：ah/token 可能已过期，请重新登录 wap.xiaoyuananquantong.com，"
               "从 URL 复制新的 ah 值后用 --ah 传入。")
-        return 0, 0, 0
+        return 0, 0, 1
     courses = cl.get("data") or []
     print(f"\n共 {len(courses)} 门课程")
 
@@ -439,6 +472,9 @@ def run_courses(s, cfg, bank):
     total_done = total_skip = total_fail = 0
 
     for c in courses:
+        if _cancelled(cfg):
+            print("\n[停止] 已取消，不再处理后续课程")
+            break
         if only_ids and c["id"] not in only_ids:
             continue
         flag = "已完成" if c.get("isFinsh") else "未完成"
@@ -447,11 +483,15 @@ def run_courses(s, cfg, bank):
         dl = api_directory_list(s, cfg, c["id"])
         if dl.get("code") != 200:
             print(f"  获取目录失败: {dl.get('message')}")
+            total_fail += 1
             continue
         chapters = dl.get("data") or []
 
         for ch in chapters:
             for art in (ch.get("list") or []):
+                if _cancelled(cfg):
+                    print("\n[停止] 已取消，不再处理后续章节")
+                    break
                 aid = art.get("id")
                 title = art.get("course", "")
                 if art.get("isFinsh") and not cfg.force:
@@ -463,7 +503,11 @@ def run_courses(s, cfg, bank):
                     total_done += 1
                 else:
                     total_fail += 1
-                time.sleep(cfg.delay)
+                _pause(cfg)
+            if _cancelled(cfg):
+                break
+        if _cancelled(cfg):
+            break
 
     print(f"\n==================== 结束 ====================")
     print(f"通过 {total_done}  跳过 {total_skip}  失败 {total_fail}")

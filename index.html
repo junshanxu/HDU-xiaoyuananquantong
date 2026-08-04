@@ -3,181 +3,597 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>校园安全通 一键答题</title>
+<meta name="color-scheme" content="light">
+<title>安全教育答题工具</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; padding: 20px; }
-.container { max-width: 760px; margin: 0 auto; }
-h1 { text-align: center; margin: 16px 0 24px; color: #1a7f37; font-size: 22px; }
-.card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.card > label { display: block; font-size: 13px; color: #666; margin-bottom: 8px; font-weight: 600; }
-input[type=text], input[type=number] { width: 100%; padding: 9px 11px; border: 1px solid #d0d5dd; border-radius: 7px; font-size: 14px; font-family: inherit; }
-input:focus { outline: none; border-color: #1a7f37; }
-.row { display: flex; gap: 10px; align-items: center; }
-.row input { flex: 1; }
-.btn { padding: 9px 18px; border: none; border-radius: 7px; font-size: 14px; cursor: pointer; background: #1a7f37; color: #fff; font-family: inherit; }
-.btn:hover { background: #156533; }
-.btn:disabled { background: #ccc; cursor: not-allowed; }
-.btn.gray { background: #e5e7eb; color: #333; }
-.btn.gray:hover { background: #d1d5db; }
-.modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
-.mode { padding: 12px; border: 1px solid #d0d5dd; border-radius: 8px; text-align: center; cursor: pointer; font-size: 14px; background: #fff; user-select: none; }
-.mode small { display: block; font-size: 11px; color: #888; margin-top: 2px; font-weight: 400; }
-.mode.active { border-color: #1a7f37; background: #e8f5ee; color: #1a7f37; font-weight: 600; }
-.mode.active small { color: #1a7f37; }
-.opts { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; align-items: center; }
-.opts label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
-.opts input[type=number] { width: 60px; padding: 5px 8px; }
-.actions { display: flex; gap: 10px; margin-bottom: 14px; }
-.actions .btn { flex: 1; padding: 12px; font-size: 15px; }
-#log { background: #1e1e1e; color: #d4d4d4; padding: 14px; border-radius: 8px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: 12.5px; line-height: 1.6; height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
-.log-line { margin: 0; }
-.log-pass { color: #4ade80; }
-.log-fail { color: #f87171; }
-.log-warn { color: #fbbf24; }
-.log-info { color: #60a5fa; }
-.tip { font-size: 12px; color: #888; margin-top: 8px; line-height: 1.5; }
-.empty { color: #666; font-style: italic; }
+:root {
+  --paper: #f2f0e9;
+  --surface: #faf9f5;
+  --ink: #171714;
+  --muted: #68675f;
+  --line: #c9c6bc;
+  --line-strong: #22221e;
+  --accent: #e5542f;
+  --accent-soft: #f7ded5;
+  --green: #176b43;
+  --green-soft: #dcebe2;
+  --terminal: #181916;
+  --terminal-line: #2f302b;
+}
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input { font: inherit; }
+
+button:focus-visible, input:focus-visible {
+  outline: 3px solid rgba(229, 84, 47, .28);
+  outline-offset: 2px;
+}
+
+.page {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 36px 0 52px;
+}
+
+.masthead {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: end;
+  padding-bottom: 24px;
+  border-bottom: 2px solid var(--line-strong);
+}
+
+.brandline {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+  color: var(--muted);
+  font: 600 12px/1.2 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+h1 {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(34px, 5vw, 66px);
+  line-height: 1.05;
+  letter-spacing: -.055em;
+  font-weight: 800;
+}
+
+.runtime {
+  display: grid;
+  gap: 7px;
+  min-width: 178px;
+  font: 12px/1.4 ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+.runtime-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.runtime-row span:first-child { color: var(--muted); }
+.runtime-row strong { font-weight: 700; }
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, .92fr);
+  gap: 20px;
+  margin-top: 20px;
+  align-items: stretch;
+}
+
+.sheet, .console {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.sheet { align-self: start; }
+
+.section {
+  padding: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.section:last-child { border-bottom: 0; }
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.section-no {
+  color: var(--accent);
+  font: 700 12px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+.url-row {
+  display: block;
+}
+
+.text-input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: #fff;
+  color: var(--ink);
+  font: 13px/1.4 ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+.text-input::placeholder { color: #99978e; }
+
+.text-input[readonly] {
+  border-color: var(--line);
+  background: #ebe9e1;
+  color: #55544d;
+  cursor: default;
+}
+
+.url-hint {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.auto-label {
+  flex: none;
+  color: var(--green);
+  font: 700 11px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .04em;
+}
+
+.btn {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn:hover { background: #e8e5dc; }
+.btn:disabled { cursor: not-allowed; opacity: .42; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover { background: #cf4524; }
+
+.btn-stop:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.params {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font: 11px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+.field .text-input {
+  height: 40px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-color: var(--line);
+}
+
+.flowline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.flowline b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.flow-arrow {
+  color: var(--accent);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.actions .btn { min-height: 50px; }
+
+.notice {
+  display: none;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: #75301f;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.notice.show { display: block; }
+.notice.ok { border-color: var(--green); background: var(--green-soft); color: #174e35; }
+
+.console {
+  display: flex;
+  min-height: 660px;
+  flex-direction: column;
+  background: var(--terminal);
+  color: #d9d9d1;
+}
+
+.console-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 54px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--terminal-line);
+  font: 11px/1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.console-title { color: #8d8e85; }
+
+.task-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #aeb0a7;
+}
+
+.state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #66675f;
+}
+
+.task-state.running .state-dot {
+  background: #f09a54;
+  box-shadow: 0 0 0 4px rgba(240, 154, 84, .12);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.task-state.done .state-dot { background: #5dcc8b; }
+.task-state.failed .state-dot { background: #f36d50; }
+
+@keyframes pulse { 50% { opacity: .45; } }
+
+#log {
+  flex: 1;
+  min-height: 0;
+  max-height: 700px;
+  overflow-y: auto;
+  padding: 20px 18px 30px;
+  font: 12px/1.75 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.empty { color: #6f7069; }
+.empty::before { content: "> "; color: var(--accent); }
+.log-line::before { content: "· "; color: #5d5e57; }
+.log-pass { color: #70d69a; }
+.log-fail { color: #ff8167; }
+.log-warn { color: #f1bd6e; }
+.log-info { color: #d9d9d1; }
+
+.console-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--terminal-line);
+  color: #74756e;
+  font: 10px/1.4 ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+@media (max-width: 900px) {
+  .masthead { grid-template-columns: 1fr; }
+  .runtime { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace { grid-template-columns: 1fr; }
+  .console { min-height: 480px; }
+}
+
+@media (max-width: 620px) {
+  .page { width: min(100% - 24px, 1180px); padding-top: 22px; }
+  .masthead { padding-bottom: 20px; }
+  h1 { font-size: 38px; }
+  .section { padding: 18px; }
+  .section-head { display: block; }
+  .params { grid-template-columns: 1fr; }
+  .url-row, .actions { grid-template-columns: 1fr; }
+  .url-row .btn { min-height: 42px; }
+  .url-hint { display: block; }
+  .auto-label { display: block; margin-top: 6px; }
+  .console-foot { display: block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; }
+}
 </style>
 </head>
 <body>
-<div class="container">
-  <h1>🛡️ 校园安全通 一键答题</h1>
-
-  <div class="card">
-    <label>① 粘贴平台链接（compulsory / simulate / test 任一页面）</label>
-    <div class="row">
-      <input type="text" id="url" placeholder="http://wap.xiaoyuananquantong.com/guns-vip-main/wap/compulsory?courseType=1&userId=...&collegeId=...&ah=...">
-      <button class="btn gray" onclick="parseUrl()">解析</button>
+<main class="page">
+  <header class="masthead">
+    <div>
+      <div class="brandline"><span class="brand-mark">HDU</span><span>杭电保卫 · 安全教育答题工具</span></div>
+      <h1>粘贴链接，<br>答题并获取证书。</h1>
     </div>
-    <div class="tip">登录 wap.xiaoyuananquantong.com → 从浏览器地址栏复制任一页面链接 → 粘贴后点「解析」。</div>
-  </div>
-
-  <div class="card">
-    <label>② 参数（解析后自动填充，可手动修改）</label>
-    <div class="row" style="margin-bottom:8px"><input type="text" id="userId" placeholder="userId"></div>
-    <div class="row" style="margin-bottom:8px"><input type="text" id="collegeId" placeholder="collegeId"></div>
-    <div class="row"><input type="text" id="ah" placeholder="ah"></div>
-  </div>
-
-  <div class="card">
-    <label>③ 选择模式</label>
-    <div class="modes">
-      <div class="mode active" data-mode="chapter" onclick="selectMode(this)">章节测试<small>必修课答题</small></div>
-      <div class="mode" data-mode="learn_all" onclick="selectMode(this)">刷题库<small>模拟考全错学习</small></div>
-      <div class="mode" data-mode="exam_mock" onclick="selectMode(this)">模拟考试<small>无限次</small></div>
-      <div class="mode" data-mode="exam_official" onclick="selectMode(this)">正式考试<small>限次</small></div>
+    <div class="runtime" aria-label="运行环境">
+      <div class="runtime-row"><span>本地服务</span><strong>127.0.0.1</strong></div>
+      <div class="runtime-row"><span>端口</span><strong>8090</strong></div>
+      <div class="runtime-row"><span>题库</span><strong>780 题</strong></div>
     </div>
-    <div class="opts">
-      <label><input type="checkbox" id="force"> 重做已完成</label>
-      <label><input type="checkbox" id="retryExam"> 正式考自动重考</label>
-      <label>最大重试 <input type="number" id="maxRetry" value="10"></label>
-    </div>
-    <div class="tip">建议流程：章节测试 → 刷题库(学到满) → 模拟考验证 → 正式考试。</div>
-  </div>
+  </header>
 
-  <div class="actions">
-    <button class="btn" id="startBtn" onclick="start()">开始答题</button>
-    <button class="btn gray" id="stopBtn" onclick="stop()" disabled>停止</button>
-  </div>
+  <div class="workspace">
+    <section class="sheet" aria-label="答题设置">
+      <div class="section">
+        <div class="section-head">
+          <h2 class="section-title"><span class="section-no">01</span>粘贴平台链接</h2>
+        </div>
+        <div class="url-row">
+          <input class="text-input" type="text" id="url" autocomplete="off" spellcheck="false" aria-label="平台链接" placeholder="http://wap.xiaoyuananquantong.com/...?..." />
+        </div>
+        <div class="url-hint">
+          <span class="auto-label">粘贴后自动开始</span>
+        </div>
 
-  <div class="card" style="padding:0;overflow:hidden">
-    <pre id="log"><span class="empty">等待开始...</span></pre>
+        <div class="params" aria-label="解析参数">
+          <div class="field">
+            <label for="userId">USER ID</label>
+            <input class="text-input" type="text" id="userId" autocomplete="off" placeholder="等待解析" readonly aria-readonly="true" />
+          </div>
+          <div class="field">
+            <label for="collegeId">COLLEGE ID</label>
+            <input class="text-input" type="text" id="collegeId" autocomplete="off" placeholder="等待解析" readonly aria-readonly="true" />
+          </div>
+          <div class="field">
+            <label for="ah">SESSION TOKEN</label>
+            <input class="text-input" type="password" id="ah" autocomplete="off" placeholder="等待解析" readonly aria-readonly="true" />
+          </div>
+        </div>
+        <div class="flowline" aria-label="自动流程">
+          <b>完成章节</b><span class="flow-arrow">→</span><b>正式考试</b><span class="flow-arrow">→</span><b>获取证书</b>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="startBtn" onclick="start()">开始答题并获取证书</button>
+          <button type="button" class="btn btn-stop" id="stopBtn" onclick="stop()" disabled>停止任务</button>
+        </div>
+        <div class="notice" id="notice" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <aside class="console" aria-label="运行记录">
+      <div class="console-head">
+        <span class="console-title">运行记录</span>
+        <span class="task-state" id="taskState"><span class="state-dot"></span><span id="stateText">等待</span></span>
+      </div>
+      <div id="log" aria-live="polite"><span class="empty">等待链接或手动启动</span></div>
+      <div class="console-foot"><span>本地进程 · 实时输出</span><span>CTRL+C 可停止服务</span></div>
+    </aside>
   </div>
-</div>
+</main>
 
 <script>
-let mode = "chapter", es = null, taskId = null;
+let es = null, taskId = null;
+const urlInput = document.getElementById("url");
 
-function selectMode(el){
-  document.querySelectorAll(".mode").forEach(e => e.classList.remove("active"));
-  el.classList.add("active");
-  mode = el.dataset.mode;
+urlInput.addEventListener("paste", () => {
+  window.setTimeout(() => {
+    if(!document.getElementById("startBtn").disabled) start(true);
+  }, 0);
+});
+
+function showNotice(message, type = "error"){
+  const el = document.getElementById("notice");
+  el.textContent = message;
+  el.className = "notice show" + (type === "ok" ? " ok" : "");
 }
 
-async function parseUrl(){
-  const url = document.getElementById("url").value.trim();
-  if(!url){ alert("请粘贴链接"); return; }
-  try {
-    const r = await fetch("/api/parse", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({url})});
-    const d = await r.json();
-    if(d.error){ alert(d.error); return; }
-    document.getElementById("userId").value = d.userId || "";
-    document.getElementById("collegeId").value = d.collegeId || "";
-    document.getElementById("ah").value = d.ah || "";
-    log("✓ 已解析参数", "info");
-  } catch(e){ alert("解析失败: " + e); }
+function clearNotice(){
+  const el = document.getElementById("notice");
+  el.textContent = "";
+  el.className = "notice";
 }
 
-function log(msg, type){
+function setState(state, text){
+  const el = document.getElementById("taskState");
+  el.className = "task-state" + (state ? " " + state : "");
+  document.getElementById("stateText").textContent = text;
+}
+
+function fillParams(params){
+  document.getElementById("userId").value = params.userId || "";
+  document.getElementById("collegeId").value = params.collegeId || "";
+  document.getElementById("ah").value = params.ah || "";
+}
+
+function log(message, type = ""){
   const el = document.getElementById("log");
   const empty = el.querySelector(".empty");
   if(empty) el.textContent = "";
-  const div = document.createElement("div");
-  div.className = "log-line " + (type||"");
-  div.textContent = msg;
-  el.appendChild(div);
+  const line = document.createElement("div");
+  line.className = "log-line" + (type ? " log-" + type : "");
+  line.textContent = message;
+  el.appendChild(line);
   el.scrollTop = el.scrollHeight;
 }
 
-async function start(){
+async function start(fromPaste = false){
   const body = {
+    url: urlInput.value.trim(),
     userId: document.getElementById("userId").value.trim(),
     collegeId: document.getElementById("collegeId").value.trim(),
     ah: document.getElementById("ah").value.trim(),
-    mode,
-    force: document.getElementById("force").checked,
-    retryExam: document.getElementById("retryExam").checked,
-    maxRetry: +document.getElementById("maxRetry").value || 10,
+    mode: "certificate",
   };
-  if(!body.ah || !body.userId || !body.collegeId){
-    alert("参数不全：请先粘贴链接点「解析」，或手动填写 userId / collegeId / ah");
+
+  if(!body.url && (!body.ah || !body.userId || !body.collegeId)){
+    showNotice("请粘贴完整链接，或手动填写三个参数。");
     return;
   }
-  document.getElementById("startBtn").disabled = true;
-  document.getElementById("stopBtn").disabled = false;
+
+  clearNotice();
+  setRunning(true);
   document.getElementById("log").textContent = "";
-  log("▶ 启动 " + modeName(mode) + " ...", "info");
+  setState("running", "运行中");
+  log(fromPaste ? "已读取链接，开始一键答题" : "开始一键答题", "info");
 
   try {
-    const r = await fetch("/api/start", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-    const d = await r.json();
-    if(d.error){ alert(d.error); resetBtns(); return; }
-    taskId = d.taskId;
-    es = new EventSource("/api/stream/" + taskId);
-    es.onmessage = (e) => {
-      const m = e.data;
-      let t = "";
-      if(m.includes("✓") || m.includes("通过！") || m.includes("通过 ") && !m.includes("未通过")) t = "pass";
-      else if(m.includes("×") || m.includes("未通过") || m.includes("失败")) t = "fail";
-      else if(m.includes("[!]") || m.includes("[错误]") || m.includes("警告")) t = "warn";
-      log(m, t);
-    };
-    es.addEventListener("done", (e) => {
-      const ok = e.data === "done";
-      log("\n════════════════════════", "");
-      log(ok ? "✅ 任务完成" : (e.data === "error" ? "❌ 任务出错" : "⏹ 已停止"), ok ? "pass" : "warn");
-      es.close(); es = null;
-      resetBtns();
+    const response = await fetch("/api/start", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body)
     });
-    es.onerror = () => { es.close(); es = null; resetBtns(); log("连接中断", "warn"); };
-  } catch(e){ alert("启动失败: " + e); resetBtns(); }
+    const data = await response.json();
+    if(data.error){
+      showNotice(data.error);
+      setState("failed", "未启动");
+      setRunning(false);
+      return;
+    }
+
+    taskId = data.taskId;
+    if(data.params) fillParams(data.params);
+    connectStream(taskId);
+  } catch(error){
+    showNotice("启动失败：" + error.message);
+    setState("failed", "错误");
+    setRunning(false);
+  }
 }
 
-function resetBtns(){
-  document.getElementById("startBtn").disabled = false;
-  document.getElementById("stopBtn").disabled = true;
+function connectStream(id){
+  es = new EventSource("/api/stream/" + id);
+  es.onmessage = event => {
+    const message = event.data;
+    let type = "";
+    if(message.includes("✓") || (message.includes("通过") && !message.includes("未通过"))) type = "pass";
+    else if(message.includes("×") || message.includes("未通过") || message.includes("失败")) type = "fail";
+    else if(message.includes("[!]") || message.includes("[错误]") || message.includes("警告")) type = "warn";
+    log(message, type);
+  };
+
+  es.addEventListener("done", event => {
+    const status = event.data;
+    if(status === "done"){
+      log("任务完成", "pass");
+      setState("done", "完成");
+    } else if(status === "stopped"){
+      log("任务已停止", "warn");
+      setState("failed", "已停止");
+    } else {
+      log("任务未完全成功", "fail");
+      setState("failed", "未完成");
+    }
+    es.close();
+    es = null;
+    setRunning(false);
+  });
+
+  es.onerror = () => {
+    if(es){ es.close(); es = null; }
+    log("进度连接中断", "warn");
+    setState("failed", "连接中断");
+    setRunning(false);
+  };
+}
+
+function setRunning(running){
+  document.getElementById("startBtn").disabled = running;
+  document.getElementById("stopBtn").disabled = !running;
+  if(!running) taskId = null;
 }
 
 async function stop(){
   if(!taskId) return;
-  await fetch("/api/stop/" + taskId, {method:"POST"});
-  log("已请求停止...", "warn");
+  document.getElementById("stopBtn").disabled = true;
+  try {
+    await fetch("/api/stop/" + taskId, {method: "POST"});
+    log("已发送停止请求，等待当前网络请求结束", "warn");
+    setState("running", "停止中");
+  } catch(error){
+    showNotice("停止失败：" + error.message);
+    document.getElementById("stopBtn").disabled = false;
+  }
 }
 
-function modeName(m){
-  return {chapter:"章节测试", learn_all:"刷题库", exam_mock:"模拟考试", exam_official:"正式考试"}[m] || m;
-}
 </script>
 </body>
 </html>

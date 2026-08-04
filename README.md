@@ -23,6 +23,15 @@ cd HDU-xiaoyuananquantong
 
 ## 使用方法（以杭州电子科技大学为例）
 
+### Web 一键答题
+
+```bash
+python3 server.py
+```
+
+浏览器打开 <http://localhost:8090>，粘贴平台链接即可。系统会自动提取
+`userId`、`collegeId`、`ah`，完成未完成章节并参加正式考试，直到通过并获取证书。
+
 ### 1. 获取你的三个参数
 
 关注公众号杭电保卫，点击服务师生，选择新生安全，进入平台，进入「学习课程」页面，从地址栏复制 3 个参数：
@@ -121,4 +130,3 @@ python3 xy_auto.py --college-id 1215080375038705665 --user-id 你的userId --ah 
 | `--course-id ID` | 只处理指定课程 |
 | `--ah TOKEN` | 指定登录 token |
 | `--yes` | 跳过开始前确认 |
-
