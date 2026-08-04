@@ -101,6 +101,9 @@ def existing_certificate_status(s, cfg):
     """正式考试机会用尽时，优先判断已有证书，避免再扫描课程。"""
     info = xy.api_test_get_test(s, cfg, "2")
     if info.get("code") != 200:
+        # 平台耗尽次数时并不总是返回 lastNum=0；有时直接以错误文本返回。
+        if "考试次数已使用完毕" in str(info.get("message") or ""):
+            return xy.load_certificate_image(s, cfg)
         return None
     data = info.get("data") or {}
     try:
