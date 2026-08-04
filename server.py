@@ -97,6 +97,21 @@ def set_certificate_result(task_id, task, cfg):
     task["certificate_image"] = certificate_image
 
 
+def existing_certificate_status(s, cfg):
+    """正式考试机会用尽时，优先判断已有证书，避免再扫描课程。"""
+    info = xy.api_test_get_test(s, cfg, "2")
+    if info.get("code") != 200:
+        return None
+    data = info.get("data") or {}
+    try:
+        last_num = int(data.get("lastNum", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+    if last_num > 0:
+        return None
+    return xy.load_certificate_image(s, cfg)
+
+
 def run_task(task_id, cfg, mode):
     """后台线程：重定向 stdout 到 queue，调用 xy_auto 答题函数"""
     t = tasks[task_id]
@@ -110,23 +125,32 @@ def run_task(task_id, cfg, mode):
     try:
         q.put(f"题库已加载 {len(bank)} 题")
         if mode == "certificate":
-            q.put("步骤 1/3：完成未完成的课程章节")
-            _, _, failed = xy.run_courses(s, cfg, bank)
-            if failed:
-                q.put("[!] 存在未完成的章节，已停止后续考试")
+            existing_certificate = existing_certificate_status(s, cfg)
+            if existing_certificate:
+                set_certificate_result(task_id, t, cfg)
+                q.put("[✓] 考试次数已用完，已直接查询到合格证书")
+                q.put("证书已生成，可在页面中打开或保存")
+            elif existing_certificate is False:
+                q.put("[!] 考试次数已用完，且未查询到合格证书")
                 t["status"] = "failed"
-            elif not cfg.cancel_event.is_set():
-                q.put("步骤 2/3：加载杭电内置题库")
-                if t["status"] == "running" and not cfg.cancel_event.is_set():
-                    q.put("步骤 3/3：参加正式考试并获取证书")
-                    ok = xy.do_exam(s, cfg, bank, "2")
-                    q.put(f"一键答题结果: {'✅ 已通过' if ok else '❌ 未通过'}")
-                    if ok:
-                        set_certificate_result(task_id, t, cfg)
-                        if t["certificate"]:
-                            q.put("证书已生成，可在页面中打开或保存")
-                    if not ok:
-                        t["status"] = "failed"
+            else:
+                q.put("步骤 1/3：完成未完成的课程章节")
+                _, _, failed = xy.run_courses(s, cfg, bank)
+                if failed:
+                    q.put("[!] 存在未完成的章节，已停止后续考试")
+                    t["status"] = "failed"
+                elif not cfg.cancel_event.is_set():
+                    q.put("步骤 2/3：加载杭电内置题库")
+                    if t["status"] == "running" and not cfg.cancel_event.is_set():
+                        q.put("步骤 3/3：参加正式考试并获取证书")
+                        ok = xy.do_exam(s, cfg, bank, "2")
+                        q.put(f"一键答题结果: {'✅ 已通过' if ok else '❌ 未通过'}")
+                        if ok:
+                            set_certificate_result(task_id, t, cfg)
+                            if t["certificate"]:
+                                q.put("证书已生成，可在页面中打开或保存")
+                        if not ok:
+                            t["status"] = "failed"
         elif mode == "chapter":
             _, _, failed = xy.run_courses(s, cfg, bank)
             if failed:
