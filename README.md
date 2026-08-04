@@ -31,6 +31,8 @@ python3 server.py
 
 浏览器打开 <http://localhost:8090>，粘贴平台链接即可。系统会自动提取
 `userId`、`collegeId`、`ah`，完成未完成章节并参加正式考试，直到通过并获取证书。
+解析器也能从残缺链接或聊天文字中优先提取 `ah=` 后的 token；浏览器会记住上一次成功的
+`userId` 和 `collegeId`，但不会保存登录 token。
 
 ### 1. 获取你的三个参数
 

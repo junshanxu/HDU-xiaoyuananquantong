@@ -8,13 +8,15 @@
 粘贴平台链接即可一键答题。
 """
 import json
+import html
 import os
 import queue
+import re
 import sys
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 # 同目录 import xy_auto
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -123,8 +125,16 @@ def run_task(task_id, cfg, mode):
 
 
 def parse_params(url):
-    """兼容普通 query、SPA hash query，以及复制出的 &amp; 链接。"""
-    parsed = urlparse(url.strip().replace("&amp;", "&"))
+    """从完整 URL、残缺 URL 或聊天文本中尽可能提取登录参数。"""
+    text = html.unescape(str(url or "").strip())
+    # 微信/聊天软件有时会把整段 query 再编码一层。
+    for _ in range(2):
+        decoded = unquote(text)
+        if decoded == text:
+            break
+        text = decoded
+
+    parsed = urlparse(text)
     chunks = [parsed.query]
     if parsed.fragment:
         chunks.append(parsed.fragment.split("?", 1)[-1])
@@ -132,11 +142,31 @@ def parse_params(url):
     for chunk in chunks:
         for key, values in parse_qs(chunk, keep_blank_values=True).items():
             q.setdefault(key.lower(), values)
-    return {
+
+    result = {
         "userId": q.get("userid", [""])[0],
         "collegeId": q.get("collegeid", [""])[0],
         "ah": q.get("ah", [""])[0],
     }
+    if not re.fullmatch(r"[0-9]{6,}", result["userId"]):
+        result["userId"] = ""
+    if not re.fullmatch(r"[0-9]{6,}", result["collegeId"]):
+        result["collegeId"] = ""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,}", result["ah"]):
+        result["ah"] = ""
+
+    # query 被截断、分隔符写成 ?/空格，或用户粘贴的是整段聊天文字时兜底。
+    patterns = {
+        "userId": r"userid\s*[=:]\s*([0-9]{6,})",
+        "collegeId": r"collegeid\s*[=:]\s*([0-9]{6,})",
+        "ah": r"ah\s*[=:]\s*([A-Za-z0-9_-]{8,})",
+    }
+    for key, pattern in patterns.items():
+        if not result[key]:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                result[key] = match.group(1)
+    return result
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -189,9 +219,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json(400, {"error": "缺少 url"})
             params = parse_params(url)
             missing = [k for k, v in params.items() if not v]
-            if missing:
-                return self._send_json(400, {"error": "链接缺少参数：" + " / ".join(missing)})
-            return self._send_json(200, params)
+            if not params["ah"]:
+                return self._send_json(400, {"error": "没有找到 ah= 后面的登录 token", "params": params})
+            return self._send_json(200, {**params, "missing": missing})
         if p == "/api/start":
             return self._start(body)
         if p.startswith("/api/stop/"):
@@ -209,8 +239,17 @@ class Handler(BaseHTTPRequestHandler):
         user_id = str(params.get("userId") or body.get("userId") or "").strip()
         college_id = str(params.get("collegeId") or body.get("collegeId") or "").strip()
         mode = body.get("mode", "certificate")
-        if not ah or not user_id or not college_id:
-            return self._send_json(400, {"error": "参数不全：需要 userId / collegeId / ah"})
+        if not ah:
+            return self._send_json(400, {
+                "error": "没有找到 ah= 后面的登录 token",
+                "params": {"userId": user_id, "collegeId": college_id, "ah": ""},
+            })
+        missing_identity = [name for name, value in (("userId", user_id), ("collegeId", college_id)) if not value]
+        if missing_identity:
+            return self._send_json(400, {
+                "error": "token 已提取；首次使用还需要带 " + " / ".join(missing_identity) + " 的完整链接",
+                "params": {"userId": user_id, "collegeId": college_id, "ah": ah},
+            })
         if mode not in VALID_MODES:
             return self._send_json(400, {"error": "无效答题模式"})
         try:

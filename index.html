@@ -453,6 +453,17 @@ h1 {
 <script>
 let es = null, taskId = null;
 const urlInput = document.getElementById("url");
+const savedIdentity = loadSavedIdentity();
+fillParams(savedIdentity);
+
+function loadSavedIdentity(){
+  try {
+    return JSON.parse(localStorage.getItem("xyIdentity") || "{}");
+  } catch(error){
+    localStorage.removeItem("xyIdentity");
+    return {};
+  }
+}
 
 urlInput.addEventListener("paste", () => {
   window.setTimeout(() => {
@@ -479,9 +490,17 @@ function setState(state, text){
 }
 
 function fillParams(params){
-  document.getElementById("userId").value = params.userId || "";
-  document.getElementById("collegeId").value = params.collegeId || "";
-  document.getElementById("ah").value = params.ah || "";
+  if(params.userId) document.getElementById("userId").value = params.userId;
+  if(params.collegeId) document.getElementById("collegeId").value = params.collegeId;
+  if(params.ah) document.getElementById("ah").value = params.ah;
+}
+
+function rememberIdentity(params){
+  if(!params.userId || !params.collegeId) return;
+  localStorage.setItem("xyIdentity", JSON.stringify({
+    userId: params.userId,
+    collegeId: params.collegeId
+  }));
 }
 
 function log(message, type = ""){
@@ -523,6 +542,7 @@ async function start(fromPaste = false){
     });
     const data = await response.json();
     if(data.error){
+      if(data.params) fillParams(data.params);
       showNotice(data.error);
       setState("failed", "未启动");
       setRunning(false);
@@ -530,7 +550,10 @@ async function start(fromPaste = false){
     }
 
     taskId = data.taskId;
-    if(data.params) fillParams(data.params);
+    if(data.params){
+      fillParams(data.params);
+      rememberIdentity(data.params);
+    }
     connectStream(taskId);
   } catch(error){
     showNotice("启动失败：" + error.message);
