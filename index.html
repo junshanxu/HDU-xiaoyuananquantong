@@ -174,7 +174,7 @@ h1 {
 
 .url-hint {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 14px;
   margin-top: 10px;
   color: var(--muted);
@@ -460,9 +460,10 @@ h1 {
           <h2 class="section-title"><span class="section-no">01</span>粘贴平台链接</h2>
         </div>
         <div class="url-row">
-          <input class="text-input" type="text" id="url" autocomplete="off" spellcheck="false" aria-label="平台链接" placeholder="http://wap.xiaoyuananquantong.com/...?..." />
+          <input class="text-input" type="text" id="url" autocomplete="off" spellcheck="false" aria-label="平台链接" placeholder="粘贴从杭电保卫公众号复制的完整链接" />
         </div>
         <div class="url-hint">
+          <span>公众号进入学习课程后，选择“复制链接”再粘贴到这里</span>
           <span class="auto-label">粘贴后自动开始</span>
         </div>
 
@@ -492,7 +493,7 @@ h1 {
         </div>
         <div class="notice" id="notice" role="status" aria-live="polite"></div>
         <div class="certificate-result" id="certificateResult" role="status" aria-live="polite">
-          <strong>证书已生成</strong>
+          <strong>已获得证书</strong>
           <img class="certificate-preview" id="certificateImage" alt="安全教育合格证书预览" hidden />
           <div class="certificate-actions">
             <a class="btn btn-primary" id="saveCertificate" href="#" download="杭电安全教育合格证书.jpg" onclick="markCertificateSaved()" hidden>保存证书图片</a>
