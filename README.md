@@ -39,7 +39,7 @@ cd HDU-xiaoyuananquantong
 
 ### 1. 获取你的三个参数
 
-手机或浏览器登录 <http://wap.xiaoyuananquantong.com>，进入「学习课程」页面，从地址栏复制 3 个参数：
+关注公众号杭电保卫，点击服务师生，选择新生安全，进入平台，进入「学习课程」页面，从地址栏复制 3 个参数：
 
 | 参数 | 说明 | 杭电示例 |
 |---|---|---|
@@ -52,7 +52,7 @@ URL 形如：
 http://wap.xiaoyuananquantong.com/guns-vip-main/wap/compulsory?courseType=1&userId=...&collegeId=...&ah=...
 ```
 
-> 脚本默认内置了杭电研究生的参数，杭电用户可直接运行；其他学校用 `--college-id` 等参数覆盖。
+> 脚本默认内置了杭电的参数，杭电用户可直接运行；其他学校用 `--college-id` 等参数覆盖。
 
 ### 2. 章节测试（必修课答题）
 
