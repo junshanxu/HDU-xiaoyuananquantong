@@ -398,7 +398,10 @@ def do_exam(s, cfg, bank, exam_type):
         if rd.get("isSuccess"):
             print(f"    [✓] 通过！得分 {score}  错题 {err}")
             if rd.get("certificate"):
-                print(f"    合格证书 id: {rd.get('certificate')}")
+                # 保持 do_exam 的布尔返回值兼容命令行调用；Web 服务可从 cfg
+                # 读取证书 ID，向前端推送可打开的证书页面。
+                cfg.certificate_id = str(rd.get("certificate"))
+                print(f"    合格证书 id: {cfg.certificate_id}")
             return True
         print(f"    [×] 未通过  得分 {score}  错题 {err}  -> 拉取错题学习")
         learned = learn_from_wrong(s, cfg, log_id, bank)

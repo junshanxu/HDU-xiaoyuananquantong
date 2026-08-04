@@ -16,7 +16,7 @@ import sys
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs, unquote
+from urllib.parse import urlparse, parse_qs, unquote, urlencode
 
 # 同目录 import xy_auto
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -30,6 +30,7 @@ WEB_DIR = os.path.dirname(os.path.abspath(__file__))
 tasks = {}
 tasks_lock = threading.Lock()
 VALID_MODES = {"certificate", "chapter", "learn_all", "exam_mock", "exam_official"}
+CERTIFICATE_PAGE = "http://wap.xiaoyuananquantong.com/guns-vip-main/wap/certificate"
 
 
 class Cfg:
@@ -64,6 +65,11 @@ class QueueWriter:
             self.buf = ""
 
 
+def certificate_url(certificate_id, user_id):
+    """构建平台证书页链接；证书页只需要证书 ID 与用户 ID。"""
+    return f"{CERTIFICATE_PAGE}?{urlencode({'id': certificate_id, 'userId': user_id})}"
+
+
 def run_task(task_id, cfg, mode):
     """后台线程：重定向 stdout 到 queue，调用 xy_auto 答题函数"""
     t = tasks[task_id]
@@ -88,6 +94,13 @@ def run_task(task_id, cfg, mode):
                     q.put("步骤 3/3：参加正式考试并获取证书")
                     ok = xy.do_exam(s, cfg, bank, "2")
                     q.put(f"一键答题结果: {'✅ 已通过' if ok else '❌ 未通过'}")
+                    certificate_id = getattr(cfg, "certificate_id", "")
+                    if ok and certificate_id:
+                        t["certificate"] = {
+                            "id": certificate_id,
+                            "url": certificate_url(certificate_id, cfg.user_id),
+                        }
+                        q.put("证书已生成，可在页面中打开或复制链接保存")
                     if not ok:
                         t["status"] = "failed"
         elif mode == "chapter":
@@ -269,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_json(409, {"error": "已有答题任务运行中，请等待完成或先停止"})
             tasks[tid] = {
                 "queue": queue.Queue(), "status": "pending", "mode": mode,
-                "cancel_event": cancel_event,
+                "cancel_event": cancel_event, "certificate": None,
             }
         threading.Thread(target=run_task, args=(tid, cfg, mode), daemon=True).start()
         self._send_json(200, {
@@ -296,6 +309,10 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                     continue
                 if line is None:
+                    certificate = t.get("certificate")
+                    if certificate:
+                        data = json.dumps(certificate, ensure_ascii=False)
+                        self.wfile.write(f"event: certificate\ndata: {data}\n\n".encode("utf-8"))
                     self.wfile.write(f"event: done\ndata: {t['status']}\n\n".encode("utf-8"))
                     self.wfile.flush()
                     break
