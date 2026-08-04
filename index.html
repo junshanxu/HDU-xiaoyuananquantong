@@ -204,27 +204,37 @@ button:focus-visible, input:focus-visible {
 .notice.show { display: block; }
 .notice.ok { border-color: var(--green); background: var(--green-soft); color: #174e35; }
 
-.certificate-result {
-  display: none;
-  margin-top: 12px;
-  padding: 14px 12px;
-  border-left: 3px solid var(--green);
-  background: var(--green-soft);
-  color: #174e35;
+.certificate-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 20px 60px rgba(16, 24, 40, .24);
 }
 
-.certificate-result.show { display: block; }
+.certificate-dialog::backdrop { background: rgba(52, 64, 84, .42); }
 
-.certificate-result strong {
-  display: block;
-  font-size: 13px;
+.certificate-dialog-body { padding: 20px; }
+
+.certificate-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
+
+.certificate-dialog strong { font-size: 16px; color: #174e35; }
 
 .certificate-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 .certificate-actions .btn {
@@ -239,10 +249,9 @@ button:focus-visible, input:focus-visible {
 .certificate-preview {
   display: block;
   width: 100%;
-  max-height: 260px;
-  margin-top: 12px;
+  max-height: min(62vh, 620px);
   object-fit: contain;
-  object-position: left top;
+  object-position: center;
   border: 1px solid rgba(23, 107, 67, .3);
   background: #fff;
 }
@@ -395,15 +404,6 @@ button:focus-visible, input:focus-visible {
           <button type="button" class="btn btn-stop" id="stopBtn" onclick="stop()" disabled>停止任务</button>
         </div>
         <div class="notice" id="notice" role="status" aria-live="polite"></div>
-        <div class="certificate-result" id="certificateResult" role="status" aria-live="polite">
-          <strong>已获得证书</strong>
-          <img class="certificate-preview" id="certificateImage" alt="安全教育合格证书预览" hidden />
-          <div class="certificate-actions">
-            <a class="btn btn-primary" id="saveCertificate" href="#" download="杭电安全教育合格证书.jpg" onclick="markCertificateSaved()" hidden>保存证书图片</a>
-            <a class="btn" id="openCertificate" href="#" target="_blank" rel="noopener noreferrer" hidden>打开证书页</a>
-            <button type="button" class="btn" id="copyCertificate" onclick="copyCertificateLink()" hidden>复制证书链接</button>
-          </div>
-        </div>
         <div class="exception-result" id="exceptionResult" role="alert" aria-live="assertive">
           <strong id="exceptionTitle"></strong>
           <p id="exceptionMessage"></p>
@@ -421,6 +421,21 @@ button:focus-visible, input:focus-visible {
     </aside>
   </div>
 </main>
+
+<dialog class="certificate-dialog" id="certificateDialog" aria-labelledby="certificateTitle">
+  <div class="certificate-dialog-body">
+    <div class="certificate-dialog-head">
+      <strong id="certificateTitle">已获得证书</strong>
+      <button type="button" class="btn btn-stop" onclick="closeCertificateDialog()">关闭</button>
+    </div>
+    <img class="certificate-preview" id="certificateImage" alt="安全教育合格证书预览" hidden />
+    <div class="certificate-actions">
+      <a class="btn btn-primary" id="saveCertificate" href="#" download="杭电安全教育合格证书.jpg" onclick="markCertificateSaved()" hidden>保存证书图片</a>
+      <a class="btn" id="openCertificate" href="#" target="_blank" rel="noopener noreferrer" hidden>打开证书页</a>
+      <button type="button" class="btn" id="copyCertificate" onclick="copyCertificateLink()" hidden>复制证书链接</button>
+    </div>
+  </div>
+</dialog>
 
 <script>
 let es = null, taskId = null;
@@ -457,7 +472,8 @@ function clearNotice(){
 }
 
 function clearCertificate(){
-  document.getElementById("certificateResult").className = "certificate-result";
+  const dialog = document.getElementById("certificateDialog");
+  if(dialog.open) dialog.close();
   const image = document.getElementById("certificateImage");
   image.hidden = true;
   image.removeAttribute("src");
@@ -505,7 +521,12 @@ function showCertificate(certificate){
     document.getElementById("copyCertificate").dataset.url = certificate.url;
     document.getElementById("copyCertificate").hidden = false;
   }
-  document.getElementById("certificateResult").className = "certificate-result show";
+  const dialog = document.getElementById("certificateDialog");
+  if(!dialog.open) dialog.showModal();
+}
+
+function closeCertificateDialog(){
+  document.getElementById("certificateDialog").close();
 }
 
 async function copyCertificateLink(){
