@@ -97,22 +97,29 @@ def set_certificate_result(task_id, task, cfg):
     task["certificate_image"] = certificate_image
 
 
+def set_failure(task, kind, message):
+    task["outcome"] = {"type": kind, "message": message}
+
+
 def existing_certificate_status(s, cfg):
     """正式考试机会用尽时，优先判断已有证书，避免再扫描课程。"""
     info = xy.api_test_get_test(s, cfg, "2")
     if info.get("code") != 200:
+        message = str(info.get("message") or "平台暂时无法读取考试状态")
         # 平台耗尽次数时并不总是返回 lastNum=0；有时直接以错误文本返回。
-        if "考试次数已使用完毕" in str(info.get("message") or ""):
-            return xy.load_certificate_image(s, cfg)
-        return None
+        if "考试次数已使用完毕" in message:
+            return ("certificate", "") if xy.load_certificate_image(s, cfg) else ("exhausted", "考试次数已用完，且未查询到合格证书")
+        if "303" in message or "登录" in message or "token" in message.lower():
+            return "token_expired", "链接已失效，请重新从杭电安全教育页面复制完整链接"
+        return "platform_error", message
     data = info.get("data") or {}
     try:
         last_num = int(data.get("lastNum", 0) or 0)
     except (TypeError, ValueError):
-        return None
+        return "platform_error", "平台返回的考试状态无效，请稍后重试"
     if last_num > 0:
-        return None
-    return xy.load_certificate_image(s, cfg)
+        return "ready", ""
+    return ("certificate", "") if xy.load_certificate_image(s, cfg) else ("exhausted", "考试次数已用完，且未查询到合格证书")
 
 
 def run_task(task_id, cfg, mode):
@@ -128,19 +135,21 @@ def run_task(task_id, cfg, mode):
     try:
         q.put(f"题库已加载 {len(bank)} 题")
         if mode == "certificate":
-            existing_certificate = existing_certificate_status(s, cfg)
-            if existing_certificate:
+            exam_status, message = existing_certificate_status(s, cfg)
+            if exam_status == "certificate":
                 set_certificate_result(task_id, t, cfg)
                 q.put("[✓] 考试次数已用完，已直接查询到合格证书")
                 q.put("证书已生成，可在页面中打开或保存")
-            elif existing_certificate is False:
-                q.put("[!] 考试次数已用完，且未查询到合格证书")
+            elif exam_status in {"exhausted", "token_expired", "platform_error"}:
+                q.put(f"[!] {message}")
+                set_failure(t, exam_status, message)
                 t["status"] = "failed"
             else:
                 q.put("步骤 1/3：完成未完成的课程章节")
                 _, _, failed = xy.run_courses(s, cfg, bank)
                 if failed:
                     q.put("[!] 存在未完成的章节，已停止后续考试")
+                    set_failure(t, "chapter_incomplete", "仍有章节未完成，请稍后重新粘贴链接继续")
                     t["status"] = "failed"
                 elif not cfg.cancel_event.is_set():
                     q.put("步骤 2/3：加载杭电内置题库")
@@ -153,6 +162,7 @@ def run_task(task_id, cfg, mode):
                             if t["certificate"]:
                                 q.put("证书已生成，可在页面中打开或保存")
                         if not ok:
+                            set_failure(t, "exam_failed", "本次未能获得证书；请查看运行记录后再重试")
                             t["status"] = "failed"
         elif mode == "chapter":
             _, _, failed = xy.run_courses(s, cfg, bank)
@@ -261,8 +271,6 @@ class Handler(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         if p in ("/", "/index.html"):
             self._serve_file("index.html", "text/html; charset=utf-8")
-        elif p == "/api/schools":
-            self._serve_file("xy_schools.json", "application/json; charset=utf-8")
         elif p.startswith("/api/certificate/"):
             self._certificate_image(p.rsplit("/", 1)[-1])
         elif p.startswith("/api/stream/"):
@@ -337,6 +345,7 @@ class Handler(BaseHTTPRequestHandler):
                 "queue": queue.Queue(), "status": "pending", "mode": mode,
                 "cancel_event": cancel_event, "certificate": None,
                 "certificate_image": None,
+                "outcome": None,
             }
         threading.Thread(target=run_task, args=(tid, cfg, mode), daemon=True).start()
         self._send_json(200, {
@@ -380,6 +389,10 @@ class Handler(BaseHTTPRequestHandler):
                     if certificate:
                         data = json.dumps(certificate, ensure_ascii=False)
                         self.wfile.write(f"event: certificate\ndata: {data}\n\n".encode("utf-8"))
+                    outcome = t.get("outcome")
+                    if outcome:
+                        data = json.dumps(outcome, ensure_ascii=False)
+                        self.wfile.write(f"event: outcome\ndata: {data}\n\n".encode("utf-8"))
                     self.wfile.write(f"event: done\ndata: {t['status']}\n\n".encode("utf-8"))
                     self.wfile.flush()
                     break

@@ -325,6 +325,19 @@ h1 {
   background: #fff;
 }
 
+.exception-result {
+  display: none;
+  margin-top: 12px;
+  padding: 14px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: #75301f;
+}
+
+.exception-result.show { display: block; }
+.exception-result strong { display: block; font-size: 13px; }
+.exception-result p { margin: 6px 0 0; font-size: 12px; line-height: 1.55; }
+
 .console {
   display: flex;
   min-height: 660px;
@@ -482,10 +495,14 @@ h1 {
           <strong>证书已生成</strong>
           <img class="certificate-preview" id="certificateImage" alt="安全教育合格证书预览" hidden />
           <div class="certificate-actions">
-            <a class="btn btn-primary" id="saveCertificate" href="#" download="杭电安全教育合格证书.jpg" hidden>保存证书图片</a>
+            <a class="btn btn-primary" id="saveCertificate" href="#" download="杭电安全教育合格证书.jpg" onclick="markCertificateSaved()" hidden>保存证书图片</a>
             <a class="btn" id="openCertificate" href="#" target="_blank" rel="noopener noreferrer" hidden>打开证书页</a>
             <button type="button" class="btn" id="copyCertificate" onclick="copyCertificateLink()" hidden>复制证书链接</button>
           </div>
+        </div>
+        <div class="exception-result" id="exceptionResult" role="alert" aria-live="assertive">
+          <strong id="exceptionTitle"></strong>
+          <p id="exceptionMessage"></p>
         </div>
       </div>
     </section>
@@ -549,6 +566,25 @@ function clearCertificate(){
   document.getElementById("copyCertificate").hidden = true;
 }
 
+function clearException(){
+  document.getElementById("exceptionResult").className = "exception-result";
+  document.getElementById("exceptionTitle").textContent = "";
+  document.getElementById("exceptionMessage").textContent = "";
+}
+
+function showException(outcome){
+  const titles = {
+    exhausted: "考试次数已用完",
+    token_expired: "链接已失效",
+    platform_error: "平台暂时不可用",
+    chapter_incomplete: "章节尚未完成",
+    exam_failed: "暂未获得证书",
+  };
+  document.getElementById("exceptionTitle").textContent = titles[outcome.type] || "任务未完成";
+  document.getElementById("exceptionMessage").textContent = outcome.message || "请稍后再试。";
+  document.getElementById("exceptionResult").className = "exception-result show";
+}
+
 function showCertificate(certificate){
   if(!certificate || (!certificate.url && !certificate.imageUrl)) return;
   if(certificate.imageUrl){
@@ -577,6 +613,11 @@ async function copyCertificateLink(){
   } catch(error){
     showNotice("复制失败，请点击“打开证书”后从地址栏复制。", "error");
   }
+}
+
+function markCertificateSaved(){
+  document.getElementById("saveCertificate").textContent = "本次证书已保存";
+  showNotice("浏览器已开始保存证书图片。", "ok");
 }
 
 function setState(state, text){
@@ -623,6 +664,7 @@ async function start(fromPaste = false){
 
   clearNotice();
   clearCertificate();
+  clearException();
   setRunning(true);
   document.getElementById("log").textContent = "";
   setState("running", "运行中");
@@ -638,6 +680,7 @@ async function start(fromPaste = false){
     if(data.error){
       if(data.params) fillParams(data.params);
       showNotice(data.error);
+      showException({type: "platform_error", message: data.error});
       setState("failed", "未启动");
       setRunning(false);
       return;
@@ -672,6 +715,14 @@ function connectStream(id){
       showCertificate(JSON.parse(event.data));
     } catch(error){
       log("证书链接读取失败", "warn");
+    }
+  });
+
+  es.addEventListener("outcome", event => {
+    try {
+      showException(JSON.parse(event.data));
+    } catch(error){
+      log("任务结果读取失败", "warn");
     }
   });
 
