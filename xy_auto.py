@@ -424,6 +424,53 @@ def do_learn_all(s, cfg, bank, exam_type):
     print(f"学习结束：本轮共学 {total} 题，题库累计 {len(bank)} 题  (文件: {BANK_FILE})")
 
 
+def run_courses(s, cfg, bank):
+    """遍历所有课程/章节/文章并答题，返回 (通过, 跳过, 失败)。供 main 和 web 后台共用。"""
+    cl = api_course_list(s, cfg)
+    if cl.get("code") != 200:
+        print(f"\n获取课程列表失败: {cl.get('message') or cl}")
+        print("提示：ah/token 可能已过期，请重新登录 wap.xiaoyuananquantong.com，"
+              "从 URL 复制新的 ah 值后用 --ah 传入。")
+        return 0, 0, 0
+    courses = cl.get("data") or []
+    print(f"\n共 {len(courses)} 门课程")
+
+    only_ids = set(x.strip() for x in cfg.course_id.split(",")) if cfg.course_id else None
+    total_done = total_skip = total_fail = 0
+
+    for c in courses:
+        if only_ids and c["id"] not in only_ids:
+            continue
+        flag = "已完成" if c.get("isFinsh") else "未完成"
+        print(f"\n=== 课程: {c['name']}  (id={c['id']})  [{flag}] ===")
+
+        dl = api_directory_list(s, cfg, c["id"])
+        if dl.get("code") != 200:
+            print(f"  获取目录失败: {dl.get('message')}")
+            continue
+        chapters = dl.get("data") or []
+
+        for ch in chapters:
+            for art in (ch.get("list") or []):
+                aid = art.get("id")
+                title = art.get("course", "")
+                if art.get("isFinsh") and not cfg.force:
+                    print(f"  ▸ [{title}] 已完成，跳过（--force 可重做）")
+                    total_skip += 1
+                    continue
+                ok = do_article(s, cfg, bank, aid, title)
+                if ok:
+                    total_done += 1
+                else:
+                    total_fail += 1
+                time.sleep(cfg.delay)
+
+    print(f"\n==================== 结束 ====================")
+    print(f"通过 {total_done}  跳过 {total_skip}  失败 {total_fail}")
+    print(f"题库现有 {len(bank)} 题，可备份复用: {BANK_FILE}")
+    return total_done, total_skip, total_fail
+
+
 # ==================== 主流程 ====================
 def main():
     p = argparse.ArgumentParser(
@@ -467,49 +514,8 @@ def main():
             print(f"\n考试结果: {'通过' if ok else '未通过'}  题库现有 {len(bank)} 题  (文件: {BANK_FILE})")
         return
 
-    # 1. 课程列表
-    cl = api_course_list(s, cfg)
-    if cl.get("code") != 200:
-        print(f"\n获取课程列表失败: {cl.get('message') or cl}")
-        print("提示：ah/token 可能已过期，请重新登录 wap.xiaoyuananquantong.com，"
-              "从 URL 复制新的 ah 值后用 --ah 传入。")
-        return
-    courses = cl.get("data") or []
-    print(f"\n共 {len(courses)} 门课程")
-
-    only_ids = set(x.strip() for x in cfg.course_id.split(",")) if cfg.course_id else None
-    total_done = total_skip = total_fail = 0
-
-    for c in courses:
-        if only_ids and c["id"] not in only_ids:
-            continue
-        flag = "已完成" if c.get("isFinsh") else "未完成"
-        print(f"\n=== 课程: {c['name']}  (id={c['id']})  [{flag}] ===")
-
-        dl = api_directory_list(s, cfg, c["id"])
-        if dl.get("code") != 200:
-            print(f"  获取目录失败: {dl.get('message')}")
-            continue
-        chapters = dl.get("data") or []
-
-        for ch in chapters:
-            for art in (ch.get("list") or []):
-                aid = art.get("id")
-                title = art.get("course", "")
-                if art.get("isFinsh") and not cfg.force:
-                    print(f"  ▸ [{title}] 已完成，跳过（--force 可重做）")
-                    total_skip += 1
-                    continue
-                ok = do_article(s, cfg, bank, aid, title)
-                if ok:
-                    total_done += 1
-                else:
-                    total_fail += 1
-                time.sleep(cfg.delay)
-
-    print(f"\n==================== 结束 ====================")
-    print(f"通过 {total_done}  跳过 {total_skip}  失败 {total_fail}")
-    print(f"题库现有 {len(bank)} 题，可备份复用: {BANK_FILE}")
+    # 1. 课程列表 -> 章节测试
+    run_courses(s, cfg, bank)
 
 
 if __name__ == "__main__":
