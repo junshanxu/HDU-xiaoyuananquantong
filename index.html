@@ -282,6 +282,36 @@ h1 {
 .notice.show { display: block; }
 .notice.ok { border-color: var(--green); background: var(--green-soft); color: #174e35; }
 
+.certificate-result {
+  display: none;
+  margin-top: 12px;
+  padding: 14px 12px;
+  border-left: 3px solid var(--green);
+  background: var(--green-soft);
+  color: #174e35;
+}
+
+.certificate-result.show { display: block; }
+
+.certificate-result strong {
+  display: block;
+  font-size: 13px;
+}
+
+.certificate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.certificate-actions .btn {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  text-decoration: none;
+}
+
 .console {
   display: flex;
   min-height: 660px;
@@ -435,6 +465,13 @@ h1 {
           <button type="button" class="btn btn-stop" id="stopBtn" onclick="stop()" disabled>停止任务</button>
         </div>
         <div class="notice" id="notice" role="status" aria-live="polite"></div>
+        <div class="certificate-result" id="certificateResult" role="status" aria-live="polite">
+          <strong>证书已生成</strong>
+          <div class="certificate-actions">
+            <a class="btn btn-primary" id="openCertificate" href="#" target="_blank" rel="noopener noreferrer">打开证书</a>
+            <button type="button" class="btn" id="copyCertificate" onclick="copyCertificateLink()">复制证书链接</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -483,6 +520,30 @@ function clearNotice(){
   el.className = "notice";
 }
 
+function clearCertificate(){
+  document.getElementById("certificateResult").className = "certificate-result";
+  document.getElementById("openCertificate").href = "#";
+  document.getElementById("copyCertificate").dataset.url = "";
+}
+
+function showCertificate(certificate){
+  if(!certificate || !certificate.url) return;
+  document.getElementById("openCertificate").href = certificate.url;
+  document.getElementById("copyCertificate").dataset.url = certificate.url;
+  document.getElementById("certificateResult").className = "certificate-result show";
+}
+
+async function copyCertificateLink(){
+  const url = document.getElementById("copyCertificate").dataset.url;
+  if(!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    showNotice("证书链接已复制，可在浏览器中打开后保存。", "ok");
+  } catch(error){
+    showNotice("复制失败，请点击“打开证书”后从地址栏复制。", "error");
+  }
+}
+
 function setState(state, text){
   const el = document.getElementById("taskState");
   el.className = "task-state" + (state ? " " + state : "");
@@ -526,6 +587,7 @@ async function start(fromPaste = false){
   }
 
   clearNotice();
+  clearCertificate();
   setRunning(true);
   document.getElementById("log").textContent = "";
   setState("running", "运行中");
@@ -569,6 +631,14 @@ function connectStream(id){
     else if(message.includes("[!]") || message.includes("[错误]") || message.includes("警告")) type = "warn";
     log(message, type);
   };
+
+  es.addEventListener("certificate", event => {
+    try {
+      showCertificate(JSON.parse(event.data));
+    } catch(error){
+      log("证书链接读取失败", "warn");
+    }
+  });
 
   es.addEventListener("done", event => {
     const status = event.data;
