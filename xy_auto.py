@@ -306,6 +306,23 @@ def api_test_list(s, cfg, log_id):
     })
 
 
+def api_certificate_image(s, cfg):
+    """读取平台生成的合格证书图片（data:image/... URI）。"""
+    return s.post(f"{BASE}/wap/user/hegeImg", [
+        ("userId", cfg.user_id), ("ah", cfg.ah),
+    ])
+
+
+def load_certificate_image(s, cfg):
+    """将有效的证书图片保存到 cfg，供 Web 前端直接展示或下载。"""
+    result = api_certificate_image(s, cfg)
+    image = result.get("data") if isinstance(result, dict) else None
+    if isinstance(image, str) and image.startswith("data:image/"):
+        cfg.certificate_image = image
+        return True
+    return False
+
+
 def api_imitate_test(s, cfg, exam_id, exam_type, log_id, questions, answers):
     fields = [
         ("examId", exam_id), ("examType", exam_type),
@@ -350,7 +367,10 @@ def do_exam(s, cfg, bank, exam_type):
     print(f"    题数 {d.get('total')}  时长 {d.get('duration')} 分钟  "
           f"及格 {d.get('pass')} 分  剩余次数 {last_num}  (补考 {d.get('lastRasitNum')})")
     if last_num <= 0:
-        print("    [!] 考试次数已用完")
+        if load_certificate_image(s, cfg):
+            print("    [✓] 考试次数已用完，但已查询到合格证书")
+            return True
+        print("    [!] 考试次数已用完，且未查询到合格证书")
         return False
     if cfg.dry_run:
         print("    (dry-run) 不创建考卷、不提交")
@@ -402,6 +422,8 @@ def do_exam(s, cfg, bank, exam_type):
                 # 读取证书 ID，向前端推送可打开的证书页面。
                 cfg.certificate_id = str(rd.get("certificate"))
                 print(f"    合格证书 id: {cfg.certificate_id}")
+                if load_certificate_image(s, cfg):
+                    print("    证书图片已读取，可在页面中保存")
             return True
         print(f"    [×] 未通过  得分 {score}  错题 {err}  -> 拉取错题学习")
         learned = learn_from_wrong(s, cfg, log_id, bank)

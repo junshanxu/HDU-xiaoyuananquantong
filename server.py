@@ -15,6 +15,7 @@ import re
 import sys
 import threading
 import uuid
+import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote, urlencode
 
@@ -70,6 +71,32 @@ def certificate_url(certificate_id, user_id):
     return f"{CERTIFICATE_PAGE}?{urlencode({'id': certificate_id, 'userId': user_id})}"
 
 
+def certificate_image_bytes(image):
+    """验证平台 data URI，返回安全的图片 MIME 类型和二进制内容。"""
+    match = re.fullmatch(r"data:(image/(?:jpeg|jpg|png));base64,([A-Za-z0-9+/=]+)", image or "")
+    if not match:
+        return None
+    try:
+        body = base64.b64decode(match.group(2), validate=True)
+    except (ValueError, base64.binascii.Error):
+        return None
+    if not body or len(body) > 5 * 1024 * 1024:
+        return None
+    return ("image/jpeg" if match.group(1) == "image/jpg" else match.group(1), body)
+
+
+def set_certificate_result(task_id, task, cfg):
+    certificate_id = getattr(cfg, "certificate_id", "")
+    certificate_image = getattr(cfg, "certificate_image", "")
+    if not certificate_id and not certificate_image:
+        return
+    task["certificate"] = {
+        "url": certificate_url(certificate_id, cfg.user_id) if certificate_id else "",
+        "imageUrl": f"/api/certificate/{task_id}" if certificate_image else "",
+    }
+    task["certificate_image"] = certificate_image
+
+
 def run_task(task_id, cfg, mode):
     """后台线程：重定向 stdout 到 queue，调用 xy_auto 答题函数"""
     t = tasks[task_id]
@@ -94,13 +121,10 @@ def run_task(task_id, cfg, mode):
                     q.put("步骤 3/3：参加正式考试并获取证书")
                     ok = xy.do_exam(s, cfg, bank, "2")
                     q.put(f"一键答题结果: {'✅ 已通过' if ok else '❌ 未通过'}")
-                    certificate_id = getattr(cfg, "certificate_id", "")
-                    if ok and certificate_id:
-                        t["certificate"] = {
-                            "id": certificate_id,
-                            "url": certificate_url(certificate_id, cfg.user_id),
-                        }
-                        q.put("证书已生成，可在页面中打开或复制链接保存")
+                    if ok:
+                        set_certificate_result(task_id, t, cfg)
+                        if t["certificate"]:
+                            q.put("证书已生成，可在页面中打开或保存")
                     if not ok:
                         t["status"] = "failed"
         elif mode == "chapter":
@@ -212,6 +236,8 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_file("index.html", "text/html; charset=utf-8")
         elif p == "/api/schools":
             self._serve_file("xy_schools.json", "application/json; charset=utf-8")
+        elif p.startswith("/api/certificate/"):
+            self._certificate_image(p.rsplit("/", 1)[-1])
         elif p.startswith("/api/stream/"):
             self._stream(p.rsplit("/", 1)[-1])
         else:
@@ -283,12 +309,26 @@ class Handler(BaseHTTPRequestHandler):
             tasks[tid] = {
                 "queue": queue.Queue(), "status": "pending", "mode": mode,
                 "cancel_event": cancel_event, "certificate": None,
+                "certificate_image": None,
             }
         threading.Thread(target=run_task, args=(tid, cfg, mode), daemon=True).start()
         self._send_json(200, {
             "taskId": tid,
             "params": {"userId": user_id, "collegeId": college_id, "ah": ah},
         })
+
+    def _certificate_image(self, tid):
+        task = tasks.get(tid)
+        image = certificate_image_bytes(task.get("certificate_image")) if task else None
+        if not image:
+            return self._send_json(404, {"error": "证书图片不存在"})
+        content_type, body = image
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", len(body))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _stream(self, tid):
         t = tasks.get(tid)
