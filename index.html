@@ -312,6 +312,19 @@ h1 {
   text-decoration: none;
 }
 
+.certificate-actions [hidden] { display: none; }
+
+.certificate-preview {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  margin-top: 12px;
+  object-fit: contain;
+  object-position: left top;
+  border: 1px solid rgba(23, 107, 67, .3);
+  background: #fff;
+}
+
 .console {
   display: flex;
   min-height: 660px;
@@ -467,9 +480,11 @@ h1 {
         <div class="notice" id="notice" role="status" aria-live="polite"></div>
         <div class="certificate-result" id="certificateResult" role="status" aria-live="polite">
           <strong>证书已生成</strong>
+          <img class="certificate-preview" id="certificateImage" alt="安全教育合格证书预览" hidden />
           <div class="certificate-actions">
-            <a class="btn btn-primary" id="openCertificate" href="#" target="_blank" rel="noopener noreferrer">打开证书</a>
-            <button type="button" class="btn" id="copyCertificate" onclick="copyCertificateLink()">复制证书链接</button>
+            <a class="btn btn-primary" id="saveCertificate" href="#" download="杭电安全教育合格证书.jpg" hidden>保存证书图片</a>
+            <a class="btn" id="openCertificate" href="#" target="_blank" rel="noopener noreferrer" hidden>打开证书页</a>
+            <button type="button" class="btn" id="copyCertificate" onclick="copyCertificateLink()" hidden>复制证书链接</button>
           </div>
         </div>
       </div>
@@ -522,14 +537,34 @@ function clearNotice(){
 
 function clearCertificate(){
   document.getElementById("certificateResult").className = "certificate-result";
+  const image = document.getElementById("certificateImage");
+  image.hidden = true;
+  image.removeAttribute("src");
+  const save = document.getElementById("saveCertificate");
+  save.hidden = true;
+  save.href = "#";
   document.getElementById("openCertificate").href = "#";
+  document.getElementById("openCertificate").hidden = true;
   document.getElementById("copyCertificate").dataset.url = "";
+  document.getElementById("copyCertificate").hidden = true;
 }
 
 function showCertificate(certificate){
-  if(!certificate || !certificate.url) return;
-  document.getElementById("openCertificate").href = certificate.url;
-  document.getElementById("copyCertificate").dataset.url = certificate.url;
+  if(!certificate || (!certificate.url && !certificate.imageUrl)) return;
+  if(certificate.imageUrl){
+    const image = document.getElementById("certificateImage");
+    image.src = certificate.imageUrl;
+    image.hidden = false;
+    const save = document.getElementById("saveCertificate");
+    save.href = certificate.imageUrl;
+    save.hidden = false;
+  }
+  if(certificate.url){
+    document.getElementById("openCertificate").href = certificate.url;
+    document.getElementById("openCertificate").hidden = false;
+    document.getElementById("copyCertificate").dataset.url = certificate.url;
+    document.getElementById("copyCertificate").hidden = false;
+  }
   document.getElementById("certificateResult").className = "certificate-result show";
 }
 
