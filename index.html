@@ -379,7 +379,7 @@ button:focus-visible, input:focus-visible {
           <input class="text-input" type="text" id="url" autocomplete="off" spellcheck="false" aria-label="平台链接" placeholder="粘贴从杭电保卫公众号复制的完整链接" />
         </div>
         <div class="url-hint">
-          <span class="auto-label">粘贴后自动开始</span>
+          <span class="auto-label">粘贴后点击开始</span>
         </div>
 
         <div class="params" aria-label="解析参数">
@@ -452,12 +452,6 @@ function loadSavedIdentity(){
     return {};
   }
 }
-
-urlInput.addEventListener("paste", () => {
-  window.setTimeout(() => {
-    if(!document.getElementById("startBtn").disabled) start(true);
-  }, 0);
-});
 
 function showNotice(message, type = "error"){
   const el = document.getElementById("notice");
@@ -573,7 +567,7 @@ function log(message, type = ""){
   el.scrollTop = el.scrollHeight;
 }
 
-async function start(fromPaste = false){
+async function start(){
   const body = {
     url: urlInput.value.trim(),
     userId: document.getElementById("userId").value.trim(),
@@ -593,7 +587,7 @@ async function start(fromPaste = false){
   setRunning(true);
   document.getElementById("log").textContent = "";
   setState("running", "运行中");
-  log(fromPaste ? "已读取链接，开始一键答题" : "开始一键答题", "info");
+  log("开始一键答题", "info");
 
   try {
     const response = await fetch("/api/start", {

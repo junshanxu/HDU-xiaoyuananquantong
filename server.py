@@ -27,11 +27,30 @@ HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8090"))
 WEB_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 全局任务存储: {taskId: {queue, status, mode}}
+# 全局任务存储: 仅保留正在运行任务和最近完成任务。
 tasks = {}
 tasks_lock = threading.Lock()
 VALID_MODES = {"certificate", "chapter", "learn_all", "exam_mock", "exam_official"}
 CERTIFICATE_PAGE = "http://wap.xiaoyuananquantong.com/guns-vip-main/wap/certificate"
+MAX_JSON_BODY_BYTES = 16 * 1024
+TASK_RETENTION_SECONDS = 10 * 60
+
+
+class RequestBodyTooLarge(ValueError):
+    """请求体超过本地 API 可接受的上限。"""
+
+
+def cleanup_task(task_id, expected_task):
+    """任务结束一段时间后释放日志、证书图片等仅存在于内存的数据。"""
+    with tasks_lock:
+        if tasks.get(task_id) is expected_task and expected_task["status"] not in ("pending", "running"):
+            tasks.pop(task_id, None)
+
+
+def schedule_task_cleanup(task_id, task):
+    timer = threading.Timer(TASK_RETENTION_SECONDS, cleanup_task, args=(task_id, task))
+    timer.daemon = True
+    timer.start()
 
 
 class Cfg:
@@ -191,6 +210,7 @@ def run_task(task_id, cfg, mode):
     finally:
         sys.stdout = old
         q.put(None)  # 结束信号
+        schedule_task_cleanup(task_id, t)
 
 
 def parse_params(url):
@@ -253,8 +273,22 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _read_body(self):
-        n = int(self.headers.get("Content-Length", 0))
-        return json.loads(self.rfile.read(n).decode("utf-8")) if n else {}
+        if self.headers.get("Transfer-Encoding"):
+            raise ValueError("不支持分块请求体")
+        try:
+            n = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise ValueError("无效 Content-Length") from exc
+        if n < 0:
+            raise ValueError("无效 Content-Length")
+        if n > MAX_JSON_BODY_BYTES:
+            raise RequestBodyTooLarge()
+        if not n:
+            return {}
+        data = self.rfile.read(n)
+        if len(data) != n:
+            raise ValueError("请求体不完整")
+        return json.loads(data.decode("utf-8"))
 
     def _serve_file(self, name, ctype):
         path = os.path.join(WEB_DIR, name)
@@ -282,7 +316,9 @@ class Handler(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         try:
             body = self._read_body()
-        except Exception:
+        except RequestBodyTooLarge:
+            return self._send_json(413, {"error": "JSON 请求体不能超过 16 KB"})
+        except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
             return self._send_json(400, {"error": "无效 JSON"})
         if p == "/api/parse":
             url = str(body.get("url") or "").strip()
@@ -404,7 +440,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     print(f"校园安全通答题服务已启动: http://localhost:{PORT}")
-    print("浏览器打开上面网址，粘贴平台链接即可一键答题。Ctrl+C 停止。")
+    print("浏览器打开上面网址，粘贴平台链接后点击开始答题。Ctrl+C 停止。")
     try:
         ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
     except KeyboardInterrupt:
