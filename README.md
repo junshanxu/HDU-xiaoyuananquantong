@@ -7,14 +7,13 @@
 
 ## 安装
 
-Python 3.6+，无任何第三方依赖，纯标准库实现。
 
 ```bash
 git clone https://github.com/yuaiccc/HDU-xiaoyuananquantong.git
 cd HDU-xiaoyuananquantong
 ```
 
-## 使用方法（以杭电为例）
+## 使用方法（以杭电为例，不知道其他学校题库情况）
 
 ### 一键答题
 
@@ -22,7 +21,7 @@ cd HDU-xiaoyuananquantong
 python3 server.py
 ```
 
-启动后，浏览器打开 <http://localhost:8090>，粘贴公众号里复制的链接即可。系统会自动提取
+启动后，浏览器打开 <http://localhost:8090>，粘贴公众号里复制的链接即可。系统会自动解析
 `userId`、`collegeId`、`ah`，完成未完成章节并参加正式考试，直到通过并获取证书。
 解析器也能从残缺链接或聊天文字中优先提取 `ah=` 后的 token；浏览器会记住上一次成功的
 `userId`，`collegeId` 固定使用杭电参数。
@@ -43,21 +42,12 @@ python3 server.py
 
 ### ah 过期后怎么办？
 
-`ah` 是会话 token，过期后接口返回 `code:303`。重新登录平台，从 URL 复制新 `ah`：
+`ah` 是会话 token，过期后接口返回 `code:303`。重新登录平台，重新复制即可：
 
 ##  原理
 
 平台是纯明文 HTTP 接口 😓，无加密、无签名、无防重放：
 
-**关键**：`/wap/wrong/list` 返回的错题里带 `answer` 字段（正确答案）。所以脚本可以先猜答案提交，错了自动学正确答案进题库，重试直到全对。`--learn-all` 进一步利用这点：提交无效答案让 50 题全错，一次学完全部正确答案。
+**关键**：`/wap/wrong/list` 返回的错题里带 `answer` 字段（正确答案）。所以脚本可以先猜答案提交，错了自动学正确答案进题库，重试直到全对。`--learn-all` 进一步利用这点：提交无效答案让 50 题全错，一次学完全部正确答案，直接打穿题库。
 
 倒计时（20 秒/30 分钟）是纯前端 `setInterval`，后端不校验，直接调 API 秒提交。
-##  文件说明
-
-| 文件 | 说明 |
-|---|---|
-| `xy_auto.py` | 主脚本 |
-| `xy_bank.json` | 杭电题库（780 题，可直接使用）|
-| `xy_schools.json` | 已知使用本系统的学校列表（collegeId → 校名）|
-
-题库 `xy_bank.json` 按题干文本归一化匹配，可备份复用。杭电的题库已包含 780 题，杭电用户下载后可直接跑正式考，无需再刷。
