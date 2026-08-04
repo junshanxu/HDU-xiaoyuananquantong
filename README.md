@@ -32,7 +32,7 @@ python3 server.py
 浏览器打开 <http://localhost:8090>，粘贴平台链接即可。系统会自动提取
 `userId`、`collegeId`、`ah`，完成未完成章节并参加正式考试，直到通过并获取证书。
 解析器也能从残缺链接或聊天文字中优先提取 `ah=` 后的 token；浏览器会记住上一次成功的
-`userId` 和 `collegeId`，但不会保存登录 token。
+`userId`，`collegeId` 固定使用杭电参数，但不会保存登录 token。
 
 ![Web 一键答题界面](docs/images/web-home.png)
 
@@ -55,7 +55,7 @@ URL 形如：
 http://wap.xiaoyuananquantong.com/guns-vip-main/wap/compulsory?courseType=1&userId=...&collegeId=...&ah=...
 ```
 
-> 脚本默认内置了杭电的参数，杭电用户可直接运行；其他学校用 `--college-id` 等参数覆盖。
+> 本项目只面向杭州电子科技大学，`collegeId` 已内置，无需手动填写。
 
 ### 2. 章节测试（必修课答题）
 
@@ -107,21 +107,10 @@ python3 xy_auto.py --exam --exam-type 2 --yes --ah 新的token
 | 文件 | 说明 |
 |---|---|
 | `xy_auto.py` | 主脚本 |
-| `xy_bank.json` | 题库（杭电 780 题，杭电用户可直接用；其他学校可能需重刷）|
+| `xy_bank.json` | 杭电题库（780 题，可直接使用）|
 | `xy_schools.json` | 已知使用本系统的学校列表（collegeId → 校名）|
 
 题库 `xy_bank.json` 按题干文本归一化匹配，可备份复用。杭电的题库已包含 780 题，杭电用户下载后可直接跑正式考，无需再刷。
-
-##  支持的学校
-
-脚本通用，任何使用「校园安全通」系统的学校都能用。
-换学校只需改 `--college-id`（其他学校需重新刷题库）：
-
-```bash
-# 例：南京大学
-python3 xy_auto.py --college-id 1215080375038705665 --user-id 你的userId --ah 你的token --yes
-```
-
 
 常用参数：
 

@@ -389,12 +389,11 @@ h1 {
   <header class="masthead">
     <div>
       <div class="brandline"><span class="brand-mark">HDU</span><span>杭电保卫 · 安全教育答题工具</span></div>
-      <h1>粘贴链接，<br>答题并获取证书。</h1>
+      <h1>粘贴链接<br><span lang="en">is all you need</span></h1>
     </div>
     <div class="runtime" aria-label="运行环境">
       <div class="runtime-row"><span>本地服务</span><strong>127.0.0.1</strong></div>
       <div class="runtime-row"><span>端口</span><strong>8090</strong></div>
-      <div class="runtime-row"><span>题库</span><strong>780 题</strong></div>
     </div>
   </header>
 
@@ -417,8 +416,8 @@ h1 {
             <input class="text-input" type="text" id="userId" autocomplete="off" placeholder="等待解析" readonly aria-readonly="true" />
           </div>
           <div class="field">
-            <label for="collegeId">COLLEGE ID</label>
-            <input class="text-input" type="text" id="collegeId" autocomplete="off" placeholder="等待解析" readonly aria-readonly="true" />
+            <label for="collegeId">COLLEGE ID · HDU</label>
+            <input class="text-input" type="text" id="collegeId" autocomplete="off" value="1940953111032012801" readonly aria-readonly="true" />
           </div>
           <div class="field">
             <label for="ah">SESSION TOKEN</label>
@@ -453,6 +452,7 @@ h1 {
 <script>
 let es = null, taskId = null;
 const urlInput = document.getElementById("url");
+const HDU_COLLEGE_ID = "1940953111032012801";
 const savedIdentity = loadSavedIdentity();
 fillParams(savedIdentity);
 
@@ -491,16 +491,13 @@ function setState(state, text){
 
 function fillParams(params){
   if(params.userId) document.getElementById("userId").value = params.userId;
-  if(params.collegeId) document.getElementById("collegeId").value = params.collegeId;
+  document.getElementById("collegeId").value = HDU_COLLEGE_ID;
   if(params.ah) document.getElementById("ah").value = params.ah;
 }
 
 function rememberIdentity(params){
-  if(!params.userId || !params.collegeId) return;
-  localStorage.setItem("xyIdentity", JSON.stringify({
-    userId: params.userId,
-    collegeId: params.collegeId
-  }));
+  if(!params.userId) return;
+  localStorage.setItem("xyIdentity", JSON.stringify({userId: params.userId}));
 }
 
 function log(message, type = ""){

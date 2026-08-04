@@ -83,12 +83,7 @@ def run_task(task_id, cfg, mode):
                 q.put("[!] 存在未完成的章节，已停止后续考试")
                 t["status"] = "failed"
             elif not cfg.cancel_event.is_set():
-                if cfg.college_id == xy.DEFAULT_COLLEGE_ID:
-                    q.put("步骤 2/3：已识别杭电账号，直接使用内置题库")
-                else:
-                    q.put("步骤 2/3：非杭电账号，先通过模拟考试补充题库")
-                    if not xy.do_learn_all(s, cfg, bank, "1"):
-                        t["status"] = "failed"
+                q.put("步骤 2/3：加载杭电内置题库")
                 if t["status"] == "running" and not cfg.cancel_event.is_set():
                     q.put("步骤 3/3：参加正式考试并获取证书")
                     ok = xy.do_exam(s, cfg, bank, "2")
@@ -166,6 +161,8 @@ def parse_params(url):
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 result[key] = match.group(1)
+    # 本项目只服务杭州电子科技大学，学校参数固定，不要求链接携带。
+    result["collegeId"] = xy.DEFAULT_COLLEGE_ID
     return result
 
 
@@ -237,7 +234,7 @@ class Handler(BaseHTTPRequestHandler):
         params = parse_params(str(body.get("url", ""))) if body.get("url") else {}
         ah = str(params.get("ah") or body.get("ah") or "").strip()
         user_id = str(params.get("userId") or body.get("userId") or "").strip()
-        college_id = str(params.get("collegeId") or body.get("collegeId") or "").strip()
+        college_id = xy.DEFAULT_COLLEGE_ID
         mode = body.get("mode", "certificate")
         if not ah:
             return self._send_json(400, {
