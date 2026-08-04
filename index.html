@@ -239,27 +239,6 @@ h1 {
   border-color: var(--line);
 }
 
-.flowline {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.flowline b {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.flow-arrow {
-  color: var(--accent);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-}
-
 .actions {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -480,9 +459,6 @@ h1 {
             <label for="ah">SESSION TOKEN</label>
             <input class="text-input" type="password" id="ah" autocomplete="off" placeholder="等待解析" readonly aria-readonly="true" />
           </div>
-        </div>
-        <div class="flowline" aria-label="自动流程">
-          <b>完成章节</b><span class="flow-arrow">→</span><b>正式考试</b><span class="flow-arrow">→</span><b>获取证书</b>
         </div>
       </div>
 
