@@ -5,14 +5,6 @@
 
 平台是纯明文 HTTP 接口😓，无加密、无签名、无防重放：
 
-| 步骤 | 章节测试接口 | 考试接口 |
-|---|---|---|
-| 列表 | `POST /wap/compulsory/list` | `POST /wap/test/getTest` |
-| 目录/创建 | `POST /wap/directory/list` | `POST /wap/test/create`（消耗 1 次）|
-| 取题 | `GET /wap/question/list` | `GET /wap/test/list` |
-| 提交 | `POST /wap/unitTest` | `POST /wap/imitateTest` |
-| 错题 | `GET /wap/wrong/list` ← **回传正确答案** | 同左 |
-
 **关键**：`/wap/wrong/list` 返回的错题里带 `answer` 字段（正确答案）。所以脚本可以先猜答案提交，错了自动学正确答案进题库，重试直到全对。`--learn-all` 进一步利用这点：提交无效答案让 50 题全错，一次学完全部正确答案。
 
 倒计时（20 秒/30 分钟）是纯前端 `setInterval`，后端不校验，直接调 API 秒提交。
@@ -95,7 +87,7 @@ python3 xy_auto.py --exam --exam-type 2 --yes --ah 新的token
 | 文件 | 说明 |
 |---|---|
 | `xy_auto.py` | 主脚本 |
-| `xy_bank.json` | 题库（杭电 780 题，已刷满，杭电用户可直接用；其他学校可能需重刷）|
+| `xy_bank.json` | 题库（杭电 780 题，杭电用户可直接用；其他学校可能需重刷）|
 | `xy_schools.json` | 已知使用本系统的学校列表（collegeId → 校名）|
 
 题库 `xy_bank.json` 按题干文本归一化匹配，可备份复用。杭电的题库已包含 780 题，杭电用户下载后可直接跑正式考，无需再刷。
@@ -110,11 +102,6 @@ python3 xy_auto.py --exam --exam-type 2 --yes --ah 新的token
 python3 xy_auto.py --college-id 1215080375038705665 --user-id 你的userId --ah 你的token --yes
 ```
 
-## 📋 完整参数
-
-```bash
-python3 xy_auto.py --help
-```
 
 常用参数：
 
