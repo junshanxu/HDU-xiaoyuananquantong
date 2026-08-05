@@ -1,18 +1,14 @@
+## 一句话，给你的Coding Agent
+```bash
+npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
+```
+
 ## 杭电保卫公众号-“研新·序章”始业教育自动答题。
 ## 链接 is all you need
 ## ⚠️ 免责声明
 
 本项目仅供学习与技术交流，**不鼓励也不协助任何违反校规的行为**。使用者需自行确认所在学校是否允许使用自动化工具完成安全教育课程，并对自己的行为负责。作者不对使用本脚本产生的任何后果承担责任。
 
-
-
-## 给 Agent：用户只需发一个链接
-
-```bash
-npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
-```
-
-安装一次后，用户只需把公众号复制的平台链接发给自己的 Agent；无需下载题库、填写 `userId` / `collegeId` / token，或配置本地服务。Skill 会从本 GitHub 仓库自动准备完整工具和 `xy_bank.json` 题库，并在本机运行。
 
 ## 安装
 
