@@ -23,7 +23,7 @@ python3 server.py
 ```
 
 启动后，浏览器打开 <http://localhost:8090>，粘贴公众号里复制的链接即可。系统会自动解析
-`userId`、`collegeId`、`ah`，完成未完成章节并参加正式考试，直到通过并获取证书。
+`userId`、`collegeId`、`ah`；确认后点击“开始答题并获取证书”，系统会完成未完成章节并参加正式考试，直到通过并获取证书。
 解析器也能从残缺链接或聊天文字中优先提取 `ah=` 后的 token；浏览器会记住上一次成功的
 `userId`，`collegeId` 固定使用杭电参数。
 
@@ -39,6 +39,16 @@ python3 server.py
 
 
 > 本项目只面向杭州电子科技大学使用，`collegeId` 已内置，无需手动填写。
+
+### 给自己的 Agent 使用
+
+仓库包含通用 Agent Skill：`skills/hdu-safety-answer/`。支持 Agent Skills 的客户端可从本仓库安装：
+
+```bash
+npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
+```
+
+Skill 只指导 Agent 在用户自己的电脑上启动和操作本项目；不会保存 token，且提交答题前要求 Agent 获得用户明确确认。
 
 
 ### ah 过期后怎么办？
