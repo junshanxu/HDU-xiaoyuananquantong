@@ -6,13 +6,13 @@
 
 
 
-## 给 Agent 的一句话安装
+## 给 Agent：用户只需发一个链接
 
 ```bash
 npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
 ```
 
-安装后让自己的 Agent 使用 `$hdu-safety-answer` 即可。首次使用时，它会从本 GitHub 仓库自动准备完整工具和 `xy_bank.json` 题库到用户选择的本地目录；不会保存 token，提交答题前会要求用户明确确认。
+安装一次后，用户只需把公众号复制的平台链接发给自己的 Agent；无需下载题库、填写 `userId` / `collegeId` / token，或配置本地服务。Skill 会从本 GitHub 仓库自动准备完整工具和 `xy_bank.json` 题库，并在本机运行。
 
 ## 安装
 

@@ -1,4 +1,4 @@
 interface:
   display_name: "HDU Safety Answer"
   short_description: "Run and check the local HDU safety tool safely"
-  default_prompt: "Use $hdu-safety-answer to start the local HDU safety tool and check its status."
+  default_prompt: "Use $hdu-safety-answer with this copied platform link: <paste link>."

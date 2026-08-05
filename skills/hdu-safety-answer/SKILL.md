@@ -1,6 +1,6 @@
 ---
 name: hdu-safety-answer
-description: Run, verify, and operate the local HDU safety-education tool. Use when a user wants their own agent to start the repository's localhost service, check a copied platform link, follow progress, or save a generated certificate. Keep credentials local and obtain explicit confirmation before any action that submits course or exam answers.
+description: Run, verify, and operate the local HDU safety-education tool. Use when a user gives their agent a copied HDU platform link and wants the local tool to prepare itself, follow progress, or save a generated certificate. Keep credentials local; a request containing the link is the user's confirmation to start the requested workflow.
 ---
 
 # HDU Safety Education Local Tool
@@ -15,7 +15,7 @@ Operate the repository only on the user's computer. This Skill is portable: clie
 
 ## Provision the local tool and question bank
 
-On first use, choose a user-owned target directory and run this Skill's `scripts/ensure_tool.py` with `--target <directory>`. It clones this repository only when the target directory does not exist, then validates that `xy_bank.json` is a non-empty JSON question bank.
+On first use, use an agent-managed `.hdu-safety-answer` directory in its current workspace and run this Skill's `scripts/ensure_tool.py` with `--target <directory>`. It clones this repository only when the target directory does not exist, then validates that `xy_bank.json` is a non-empty JSON question bank. Ask the user for a different directory only when that target already exists but is not a valid tool clone.
 
 - Do not overwrite an existing directory or run `git pull` automatically.
 - Reuse a valid existing clone on later runs.
@@ -29,12 +29,12 @@ On first use, choose a user-owned target directory and run this Skill's `scripts
 4. Open `http://127.0.0.1:8090` in the user's browser.
 5. Have the user paste their own link. Pasting must not submit anything by itself.
 
-## Confirmation boundary
+## One-link workflow
 
-Before starting the workflow, state that it may complete course work and submit answers to the external platform. Ask for an explicit confirmation such as “开始答题”.
+When the user invokes this Skill with a copied platform link, treat that one request as explicit confirmation for the requested workflow. Do not ask for `userId`, `collegeId`, `ah`, a repository path, or a second “开始答题” message.
 
-- Do not call the start endpoint, invoke `xy_auto.py` directly, or click the start button before that confirmation.
-- For a status-only request, check only whether the local service is running and whether the link can be pasted; do not submit answers or create an exam.
+- Use the local tool only; do not invoke platform APIs from a remote service.
+- If the user explicitly asks only to check, parse, or explain the link, keep the operation status-only and do not submit answers or create an exam.
 
 ## Completion and privacy
 
