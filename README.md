@@ -1,6 +1,6 @@
 # 杭电保卫公众号-“研新·序章”始业教育自动答题。
 
-> 链接 is all you need
+# 链接 is all you need
 
 ## ⚠️ 免责声明
 
@@ -12,7 +12,7 @@
 npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
 ```
 
-## 安装
+## 或者手动安装
 
 ```bash
 git clone https://github.com/yuaiccc/HDU-xiaoyuananquantong.git
@@ -21,7 +21,7 @@ cd HDU-xiaoyuananquantong
 
 ## 使用方法（以杭电为例，不知道其他学校题库情况）
 
-### 一键答题
+
 
 ```bash
 python3 server.py
@@ -43,9 +43,7 @@ python3 server.py
 
 > 本项目只面向杭州电子科技大学使用，`collegeId` 已内置，无需手动填写。
 
-### 给自己的 Agent 使用
 
-通用 Skill 位于 `skills/hdu-safety-answer/`。它只在用户自己的电脑上启动和操作本项目；首次运行会复用或克隆完整仓库并校验题库，不会覆盖已有工具目录。
 
 ### ah 过期后怎么办？
 
