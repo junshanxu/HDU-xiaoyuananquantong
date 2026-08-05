@@ -6,6 +6,14 @@
 
 
 
+## 给 Agent 的一句话安装
+
+```bash
+npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
+```
+
+安装后让自己的 Agent 使用 `$hdu-safety-answer` 即可。首次使用时，它会从本 GitHub 仓库自动准备完整工具和 `xy_bank.json` 题库到用户选择的本地目录；不会保存 token，提交答题前会要求用户明确确认。
+
 ## 安装
 
 
@@ -42,14 +50,7 @@ python3 server.py
 
 ### 给自己的 Agent 使用
 
-仓库包含通用 Agent Skill：`skills/hdu-safety-answer/`。支持 Agent Skills 的客户端可从本仓库安装：
-
-```bash
-npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
-```
-
-Skill 只指导 Agent 在用户自己的电脑上启动和操作本项目；不会保存 token，且提交答题前要求 Agent 获得用户明确确认。
-首次使用时，Skill 会将完整仓库（包括 `xy_bank.json` 题库）克隆到用户选择的本地目录并校验题库；Skill 安装包本身不重复携带题库。
+通用 Skill 位于 `skills/hdu-safety-answer/`。它只在用户自己的电脑上启动和操作本项目；首次运行会复用或克隆完整仓库并校验题库，不会覆盖已有工具目录。
 
 
 ### ah 过期后怎么办？
