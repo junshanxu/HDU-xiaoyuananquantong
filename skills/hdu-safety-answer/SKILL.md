@@ -9,16 +9,25 @@ Operate the repository only on the user's computer. This Skill is portable: clie
 
 ## Preconditions
 
-- Locate a clone containing `server.py`, `xy_auto.py`, and `xy_bank.json`. Do not download or use a public proxy for this workflow.
+- Provision a clone containing `server.py`, `xy_auto.py`, and `xy_bank.json`. The Skill package intentionally does not duplicate the code or question bank.
 - Keep the service bound to `127.0.0.1`. Do not set `HOST` to a non-local address.
 - Treat a copied platform link and its `ah` value as credentials. Do not print, repeat, save, commit, upload, or include either in logs.
 
+## Provision the local tool and question bank
+
+On first use, choose a user-owned target directory and run this Skill's `scripts/ensure_tool.py` with `--target <directory>`. It clones this repository only when the target directory does not exist, then validates that `xy_bank.json` is a non-empty JSON question bank.
+
+- Do not overwrite an existing directory or run `git pull` automatically.
+- Reuse a valid existing clone on later runs.
+- The script does not accept, read, or write platform links or tokens.
+
 ## Start and check
 
-1. Enter the repository and run `python3 -m py_compile server.py xy_auto.py`.
-2. Start the service with `python3 server.py`; confirm it listens at `http://127.0.0.1:8090`.
-3. Open `http://127.0.0.1:8090` in the user's browser.
-4. Have the user paste their own link. Pasting must not submit anything by itself.
+1. Provision or locate the verified repository and enter it.
+2. Run `python3 -m py_compile server.py xy_auto.py`.
+3. Start the service with `python3 server.py`; confirm it listens at `http://127.0.0.1:8090`.
+4. Open `http://127.0.0.1:8090` in the user's browser.
+5. Have the user paste their own link. Pasting must not submit anything by itself.
 
 ## Confirmation boundary
 

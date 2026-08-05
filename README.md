@@ -49,6 +49,7 @@ npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
 ```
 
 Skill 只指导 Agent 在用户自己的电脑上启动和操作本项目；不会保存 token，且提交答题前要求 Agent 获得用户明确确认。
+首次使用时，Skill 会将完整仓库（包括 `xy_bank.json` 题库）克隆到用户选择的本地目录并校验题库；Skill 安装包本身不重复携带题库。
 
 
 ### ah 过期后怎么办？
