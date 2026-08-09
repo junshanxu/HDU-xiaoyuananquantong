@@ -8,21 +8,10 @@
 
 ## 一句话使用
 
-macOS 或 Linux 用户在终端运行下面这一句，即可下载完整工具、校验题库并启动本地网页：
+Linux 用户在终端运行下面这一句，即可下载完整工具、校验题库并启动本地网页：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.sh | bash
-```
-
-工具默认安装到 `~/.local/share/hdu-safety-answer`，重复运行会复用已有安装，不会自动覆盖文件。服务只监听 `127.0.0.1:8090`；关闭运行命令的终端或按 `Ctrl+C` 即可停止。
-安装器要求电脑已安装 Git 和 Python 3，缺少时会直接提示，不会修改其他系统配置。
-
-如果希望先检查脚本再执行：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.sh -o install.sh
-less install.sh
-bash install.sh
 ```
 
 ### 给 Coding Agent 安装 Skill（可选）
@@ -48,10 +37,8 @@ cd HDU-xiaoyuananquantong
 python3 server.py
 ```
 
-启动后，浏览器打开 <http://localhost:8090>，粘贴公众号里复制的链接即可。系统会自动解析
-`userId`、`collegeId`、`ah`；自动完成可处理的流程；成功后弹出证书。
-解析器也能从残缺链接或聊天文字中优先提取 `ah=` 后的 token；浏览器会记住上一次成功的
-`userId`，`collegeId` 固定使用杭电参数。
+启动后，浏览器打开 <http://localhost:8090>，粘贴公众号里复制的链接即可。系统会自动完成可处理的流程；成功后弹出证书。
+`collegeId` 固定使用杭电参数。
 
 ![一键答题界面](docs/images/web-home.png)
 
