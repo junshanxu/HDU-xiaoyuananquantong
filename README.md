@@ -6,7 +6,28 @@
 
 本项目仅供学习与技术交流，**不鼓励也不协助任何违反校规的行为**。使用者需自行确认所在学校是否允许使用自动化工具完成安全教育课程，并对自己的行为负责。作者不对使用本脚本产生的任何后果承担责任。
 
-## 一句话，给你的Coding Agent
+## 一句话使用
+
+macOS 或 Linux 用户在终端运行下面这一句，即可下载完整工具、校验题库并启动本地网页：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.sh | bash
+```
+
+工具默认安装到 `~/.local/share/hdu-safety-answer`，重复运行会复用已有安装，不会自动覆盖文件。服务只监听 `127.0.0.1:8090`；关闭运行命令的终端或按 `Ctrl+C` 即可停止。
+安装器要求电脑已安装 Git 和 Python 3，缺少时会直接提示，不会修改其他系统配置。
+
+如果希望先检查脚本再执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.sh -o install.sh
+less install.sh
+bash install.sh
+```
+
+### 给 Coding Agent 安装 Skill（可选）
+
+如果希望让 Coding Agent 学会准备和操作本工具，可以另外安装仓库提供的 Skill：
 
 ```bash
 npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
