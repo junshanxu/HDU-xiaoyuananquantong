@@ -8,7 +8,6 @@ Linux 用户在终端运行下面这一句，即可下载完整工具、校验�
 curl -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.sh | bash
 ```
 
-给 Coding Agent 安装 Skill
 
 如果希望让 Coding Agent 学会准备和操作本工具，可以另外安装仓库提供的 Skill：
 
