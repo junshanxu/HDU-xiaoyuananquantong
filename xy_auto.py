@@ -17,31 +17,21 @@
 
 题库 xy_bank.json 会自动积累（键: 归一化题干，值: 正确答案），越用越准，可备份复用。
 
-用法：
-  python3 xy_auto.py --dry-run                 # 先只看题目不提交（验证链路）
-  python3 xy_auto.py                           # 一键完成所有未完成文章
-  python3 xy_auto.py --force                   # 重做（含已完成）
-  python3 xy_auto.py --course-id 1656483732162404354   # 只处理指定课程
-  python3 xy_auto.py --ah 新token               # ah 过期后换新 token
+本模块作为 server.py 的库被调用，不提供命令行入口。
 """
 
-import argparse
 import http.cookiejar
 import json
 import os
 import re
-import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-# ==================== 默认配置（可用命令行覆盖）====================
+# ==================== 默认配置 ====================
 BASE = "http://wap.xiaoyuananquantong.com/guns-vip-main"
-DEFAULT_USER_ID = ""
-DEFAULT_COLLEGE_ID = "1940953111032012801"
-DEFAULT_AH = ""
-DEFAULT_COURSE_TYPE = "1"
+DEFAULT_COLLEGE_ID = "1940953111032012801"  # 杭电固定参数
 BANK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "xy_bank.json")
 
 UA = ("Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 "
@@ -52,6 +42,20 @@ QTYPE_CN2NUM = {"单选": "1", "多选": "2", "判断": "3"}
 
 
 # ==================== HTTP Session ====================
+# 需要从日志/异常 message 中抹掉的敏感参数（ah 是登录 token，userId 是学号）。
+_SENSITIVE_PARAMS = ("ah", "userId", "collegeId")
+
+
+def _sanitize(text):
+    """抹掉字符串中的 ah=/userId= 等敏感参数值，避免 token 经 SSE 日志泄露。"""
+    if not text:
+        return text
+    out = str(text)
+    for key in _SENSITIVE_PARAMS:
+        out = re.sub(rf"\b{key}\s*[=:]\s*[^\s&'\"]+", f"{key}=***", out, flags=re.IGNORECASE)
+    return out
+
+
 class Session:
     def __init__(self):
         cj = http.cookiejar.CookieJar()
@@ -73,9 +77,9 @@ class Session:
                 body = e.read().decode("utf-8", "replace")[:300]
             except Exception:
                 pass
-            return {"code": e.code, "message": f"HTTP {e.code}: {body}"}
+            return {"code": e.code, "message": _sanitize(f"HTTP {e.code}: {body}")}
         except Exception as e:
-            return {"code": -1, "message": str(e)}
+            return {"code": -1, "message": _sanitize(str(e))}
 
     def get(self, url, params=None):
         if params:
@@ -91,6 +95,14 @@ class Session:
 
 
 # ==================== 题库 ====================
+def _to_int(value, default=0):
+    """安全转 int：平台返回的数字字段可能是 None/空串/非数字串，统一兜底。"""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def norm(text):
     """归一化题干：去空白与标点，做匹配键（避免空格/标点差异导致命中率低）"""
     t = re.sub(r"\s+", "", text or "")
@@ -109,8 +121,11 @@ def load_bank():
 
 
 def save_bank(bank):
-    with open(BANK_FILE, "w", encoding="utf-8") as f:
+    # 原子写：先写临时文件再 os.replace，避免写一半进程中断导致题库文件截断丢失。
+    tmp = BANK_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(bank, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, BANK_FILE)
 
 
 # ==================== 业务接口 ====================
@@ -140,16 +155,7 @@ def api_unit_test(s, cfg, article_id, title, questions, answers):
         ("userId", cfg.user_id),
         ("ah", cfg.ah),
     ]
-    for q in questions:
-        qid = q["id"]
-        qt = _qtype(q)
-        ans = answers.get(qid, "")
-        if qt == "2":  # 多选：~qid-A~qid-B~qid-C
-            val = "".join(f"~{qid}-{c}" for c in ans) if ans else ""
-        else:          # 单选/判断：qid-A 或 qid-1
-            val = f"{qid}-{ans}" if ans else ""
-        fields.append(("question", val))
-        fields.append(("quesType", qt))
+    fields.extend(_answer_fields(questions, answers))
     return s.post(f"{BASE}/wap/unitTest", fields)
 
 
@@ -163,6 +169,28 @@ def _qtype(q):
     """统一题型为数字: 1单选 2多选 3判断（兼容 question/list 的中文与 test/list 的数字编码）"""
     qt = q.get("quesType", "")
     return QTYPE_CN2NUM.get(qt, qt)
+
+
+def _answer_fields(questions, answers, with_question_id=False):
+    """构造每题的提交字段列表（unitTest 与 imitateTest 共用）。
+
+    单选/判断: question=qid-A 或 qid-1
+    多选:     question=~qid-A~qid-B~qid-C（前导 ~，每个选项前缀 qid-）
+    """
+    fields = []
+    for q in questions:
+        qid = q["id"]
+        qt = _qtype(q)
+        ans = answers.get(qid, "")
+        if qt == "2":  # 多选
+            val = "".join(f"~{qid}-{c}" for c in ans) if ans else ""
+        else:          # 单选/判断
+            val = f"{qid}-{ans}" if ans else ""
+        fields.append(("question", val))
+        if with_question_id:
+            fields.append(("questionId", qid))
+        fields.append(("quesType", qt))
+    return fields
 
 
 def guess(q):
@@ -193,9 +221,9 @@ def learn_from_wrong(s, cfg, log_id, bank):
     if not log_id:
         return 0
     data = api_wrong_list(s, cfg, log_id)
-    re = data.get("data") or {}
+    resp = data.get("data") or {}
     learned = 0
-    for item in (re.get("data") or []):
+    for item in (resp.get("data") or []):
         q = item.get("question") or {}
         ans = (q.get("answer", "") or "").replace(",", "")  # 多选 "A,C,D," -> "ACD"
         if ans and q.get("question"):
@@ -329,17 +357,7 @@ def api_imitate_test(s, cfg, exam_id, exam_type, log_id, questions, answers):
         ("sysSource", cfg.exam_class),   # sysSource 即 examClass
         ("logId", log_id), ("userId", cfg.user_id), ("ah", cfg.ah),
     ]
-    for q in questions:
-        qid = q["id"]
-        qt = _qtype(q)
-        ans = answers.get(qid, "")
-        if qt == "2":
-            val = "".join(f"~{qid}-{c}" for c in ans) if ans else ""
-        else:
-            val = f"{qid}-{ans}" if ans else ""
-        fields.append(("question", val))
-        fields.append(("questionId", qid))
-        fields.append(("quesType", qt))
+    fields.extend(_answer_fields(questions, answers, with_question_id=True))
     return s.post(f"{BASE}/wap/imitateTest", fields)
 
 
@@ -347,10 +365,10 @@ def _extract_questions(data):
     """统一抽取题目列表：
        question/list -> data.list[i] 即题目；
        test/list     -> data.data[i].question 才是题目"""
-    re = data.get("data") or {}
-    if isinstance(re, dict) and re.get("data"):
-        return [it["question"] for it in re["data"] if isinstance(it, dict) and it.get("question")]
-    lst = re.get("list") if isinstance(re, dict) else None
+    resp = data.get("data") or {}
+    if isinstance(resp, dict) and isinstance(resp.get("data"), list):
+        return [it["question"] for it in resp["data"] if isinstance(it, dict) and it.get("question")]
+    lst = resp.get("list") if isinstance(resp, dict) else None
     return lst or []
 
 
@@ -362,7 +380,7 @@ def do_exam(s, cfg, bank, exam_type):
     d = info.get("data") or {}
     exam_id = d.get("id", "")
     name = d.get("name", "")
-    last_num = int(d.get("lastNum", 0) or 0)
+    last_num = _to_int(d.get("lastNum", 0) or 0)
     print(f"\n=== 考试: {name}  (examType={exam_type}, id={exam_id}) ===")
     print(f"    题数 {d.get('total')}  时长 {d.get('duration')} 分钟  "
           f"及格 {d.get('pass')} 分  剩余次数 {last_num}  (补考 {d.get('lastRasitNum')})")
@@ -437,51 +455,6 @@ def do_exam(s, cfg, bank, exam_type):
     return False
 
 
-def do_learn_all(s, cfg, bank, exam_type):
-    """全错提交快速学习：每轮提交无效答案让 50 题全错，一次学完全部正确答案。
-    比正常刷题(只学猜错的)快几十倍，几轮即可覆盖整个题库。"""
-    info = api_test_get_test(s, cfg, exam_type)
-    if info.get("code") != 200:
-        print(f"获取考试信息失败: {info.get('message') or info}"); return False
-    d = info.get("data") or {}
-    exam_id = d.get("id", "")
-    print(f"\n=== 快速学习模式: {d.get('name')}  (题库现有 {len(bank)} 题) ===")
-    if cfg.dry_run:
-        print("    (dry-run) 不创建考卷"); return True
-    empty, total = 0, 0
-    for attempt in range(1, cfg.max_exam_retry + 1):
-        if _cancelled(cfg):
-            print("  [停止] 已取消，不再创建或提交考卷")
-            return False
-        cre = api_test_create(s, cfg, exam_id)
-        if cre.get("code") != 200:
-            print(f"  第{attempt}轮创建考卷失败: {cre.get('message')}"); return False
-        log_id = (cre.get("data") or {}).get("logId", "")
-        qdata = api_test_list(s, cfg, log_id)
-        qs = _extract_questions(qdata)
-        if not qs:
-            print(f"  第{attempt}轮无题目"); continue
-        # 全部提交无效答案(单选/多选 Z、判断 9)，确保每题都错 -> 触发错题回传全部正确答案
-        answers = {q["id"]: ("9" if _qtype(q) == "3" else "Z") for q in qs}
-        if _cancelled(cfg):
-            print("  [停止] 已取消，不再提交考卷")
-            return False
-        api_imitate_test(s, cfg, exam_id, str(exam_type), log_id, qs, answers)
-        learned = learn_from_wrong(s, cfg, log_id, bank)
-        total += learned
-        save_bank(bank)
-        print(f"  第{attempt:2d}轮: 学到 {learned:2d} 新题  (题库累计 {len(bank)})")
-        if learned == 0:
-            empty += 1
-            if empty >= 2:
-                print("  ✓ 连续 2 轮无新题，题库已覆盖完成"); break
-        else:
-            empty = 0
-        _pause(cfg)
-    print(f"学习结束：本轮共学 {total} 题，题库累计 {len(bank)} 题  (文件: {BANK_FILE})")
-    return True
-
-
 def run_courses(s, cfg, bank):
     """遍历所有课程/章节/文章并答题，返回 (通过, 跳过, 失败)。供 main 和 web 后台共用。"""
     cl = api_course_list(s, cfg)
@@ -538,57 +511,3 @@ def run_courses(s, cfg, bank):
     print(f"通过 {total_done}  跳过 {total_skip}  失败 {total_fail}")
     print(f"题库现有 {len(bank)} 题，可备份复用: {BANK_FILE}")
     return total_done, total_skip, total_fail
-
-
-# ==================== 主流程 ====================
-def main():
-    p = argparse.ArgumentParser(
-        description="校园安全通自动答题（自动学习错题，闭环完成）",
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--user-id", default=DEFAULT_USER_ID)
-    p.add_argument("--college-id", default=DEFAULT_COLLEGE_ID)
-    p.add_argument("--ah", default=DEFAULT_AH, help="登录 token（会话凭证，过期需更换）")
-    p.add_argument("--course-type", default=DEFAULT_COURSE_TYPE, help="课程类型，默认 1")
-    p.add_argument("--course-id", help="只处理指定课程 id（逗号分隔）")
-    p.add_argument("--force", action="store_true", help="重做已完成的文章")
-    p.add_argument("--dry-run", action="store_true", help="只看题目不提交")
-    p.add_argument("--delay", type=float, default=0.5, help="请求间隔秒，默认 0.5")
-    p.add_argument("--max-retry", type=int, default=10, help="每篇文章最大重试次数，默认 10")
-    p.add_argument("--yes", action="store_true", help="跳过开始前确认")
-    p.add_argument("--exam", action="store_true", help="考试模式(simulate)")
-    p.add_argument("--exam-type", default="1", help="1=模拟考试(无限次) 2=正式考试(限次)")
-    p.add_argument("--exam-class", default="10")
-    p.add_argument("--retry-exam", action="store_true", help="正式考试未通过也自动重考(消耗次数)")
-    p.add_argument("--max-exam-retry", type=int, default=30, help="考试最大尝试次数(模拟考刷题用)")
-    p.add_argument("--learn-all", action="store_true", help="全错提交快速学习:每轮学全部50题正确答案,刷满题库")
-    cfg = p.parse_args()
-
-    s = Session()
-    bank = load_bank()
-    print(f"题库已加载 {len(bank)} 题  (文件: {BANK_FILE})")
-    print(f"用户 {cfg.user_id}  课程类型 {cfg.course_type}  force={cfg.force}  dry-run={cfg.dry_run}")
-
-    if not cfg.dry_run and not cfg.yes:
-        print("\n即将开始自动答题并真实提交到你的账号。回车继续，Ctrl+C 取消。")
-        try:
-            input()
-        except KeyboardInterrupt:
-            print("已取消"); return
-
-    if cfg.exam:
-        if cfg.learn_all:
-            do_learn_all(s, cfg, bank, cfg.exam_type)
-        else:
-            ok = do_exam(s, cfg, bank, cfg.exam_type)
-            print(f"\n考试结果: {'通过' if ok else '未通过'}  题库现有 {len(bank)} 题  (文件: {BANK_FILE})")
-        return
-
-    # 1. 课程列表 -> 章节测试
-    run_courses(s, cfg, bank)
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n已中断"); sys.exit(130)
