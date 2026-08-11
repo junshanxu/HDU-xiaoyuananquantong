@@ -573,7 +573,6 @@ async function start(){
     userId: document.getElementById("userId").value.trim(),
     collegeId: document.getElementById("collegeId").value.trim(),
     ah: document.getElementById("ah").value.trim(),
-    mode: "certificate",
   };
 
   if(!body.url && (!body.ah || !body.userId || !body.collegeId)){
@@ -619,6 +618,8 @@ async function start(){
 }
 
 function connectStream(id){
+  if(es){ es.close(); es = null; }  // 关闭可能残留的旧连接，避免双流重复日志
+  let streamFinished = false;
   es = new EventSource("/api/stream/" + id);
   es.onmessage = event => {
     const message = event.data;
@@ -646,6 +647,7 @@ function connectStream(id){
   });
 
   es.addEventListener("done", event => {
+    streamFinished = true;
     const status = event.data;
     if(status === "done"){
       log("任务完成", "pass");
@@ -663,6 +665,13 @@ function connectStream(id){
   });
 
   es.onerror = () => {
+    // done 事件已到达后的 onerror 是正常关闭，忽略；服务端主动关闭会触发 readyState=CLOSED。
+    if(streamFinished) return;
+    if(es && es.readyState === EventSource.CONNECTING){
+      // 浏览器正在自动重连，短暂网络抖动不应判定为失败。
+      log("进度连接中断，正在重连…", "warn");
+      return;
+    }
     if(es){ es.close(); es = null; }
     log("进度连接中断", "warn");
     setState("failed", "连接中断");
