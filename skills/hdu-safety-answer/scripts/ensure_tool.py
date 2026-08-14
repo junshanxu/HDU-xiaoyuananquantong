@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 REPOSITORY = "https://github.com/yuaiccc/HDU-xiaoyuananquantong.git"
-REQUIRED_FILES = ("server.py", "xy_auto.py", "xy_bank.json")
+REQUIRED_FILES = ("server.py", "xy_auto.py", "xy_bank.json", "index.html")
 
 
 def run(*args: str) -> None:

@@ -474,6 +474,7 @@ function clearCertificate(){
   const save = document.getElementById("saveCertificate");
   save.hidden = true;
   save.href = "#";
+  save.textContent = "保存证书图片";
   document.getElementById("openCertificate").href = "#";
   document.getElementById("openCertificate").hidden = true;
   document.getElementById("copyCertificate").dataset.url = "";
@@ -620,8 +621,10 @@ async function start(){
 function connectStream(id){
   if(es){ es.close(); es = null; }  // 关闭可能残留的旧连接，避免双流重复日志
   let streamFinished = false;
+  let reconnectTries = 0;
   es = new EventSource("/api/stream/" + id);
   es.onmessage = event => {
+    reconnectTries = 0;
     const message = event.data;
     let type = "";
     if(message.includes("✓") || (message.includes("通过") && !message.includes("未通过"))) type = "pass";
@@ -631,6 +634,7 @@ function connectStream(id){
   };
 
   es.addEventListener("certificate", event => {
+    reconnectTries = 0;
     try {
       showCertificate(JSON.parse(event.data));
     } catch(error){
@@ -639,6 +643,7 @@ function connectStream(id){
   });
 
   es.addEventListener("outcome", event => {
+    reconnectTries = 0;
     try {
       showException(JSON.parse(event.data));
     } catch(error){
@@ -668,8 +673,18 @@ function connectStream(id){
     // done 事件已到达后的 onerror 是正常关闭，忽略；服务端主动关闭会触发 readyState=CLOSED。
     if(streamFinished) return;
     if(es && es.readyState === EventSource.CONNECTING){
-      // 浏览器正在自动重连，短暂网络抖动不应判定为失败。
-      log("进度连接中断，正在重连…", "warn");
+      // 浏览器正在自动重连。EventSource 对失败/404 会无限重连，
+      // 超过上限就判定本地服务已丢失，恢复按钮让用户刷新重试。
+      reconnectTries += 1;
+      if(reconnectTries >= 5){
+        es.close();
+        es = null;
+        log("服务连接丢失，请确认本地服务仍在运行后刷新页面", "fail");
+        setState("failed", "连接中断");
+        setRunning(false);
+        return;
+      }
+      log("进度连接中断，正在重连…（" + reconnectTries + "/5）", "warn");
       return;
     }
     if(es){ es.close(); es = null; }

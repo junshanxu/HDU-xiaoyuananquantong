@@ -138,6 +138,25 @@ class ServerFlowTests(unittest.TestCase):
         status, _ = self.http_err("GET", "/api/certificate/deadbeef")
         self.assertEqual(status, 404)
 
+    def test_certificate_image_validation(self):
+        """证书 data URI 校验：只接受受控 MIME 与合法 base64，超限内容拒绝。"""
+        good = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\n").decode()
+        mime, body = server.certificate_image_bytes(good)
+        self.assertEqual((mime, body), ("image/png", b"\x89PNG\r\n\x1a\n"))
+
+        # jpg 别名归一化为 image/jpeg
+        mime, _ = server.certificate_image_bytes("data:image/jpg;base64,AAAA")
+        self.assertEqual(mime, "image/jpeg")
+
+        for bad in (
+            "",
+            "data:text/html;base64,AAAA",                      # 非图片 MIME
+            "data:image/png;base64,!!!invalid!!!",              # 非法字符
+            "data:image/png;base64," + base64.b64encode(b"x" * (5 * 1024 * 1024 + 1)).decode(),  # 超 5MB
+            "data:image/png;base64,abc",                        # base64 长度不可被 4 整除
+        ):
+            self.assertIsNone(server.certificate_image_bytes(bad))
+
     # ---------- 完整成功链路 ----------
     def test_full_flow_certificate(self):
         with mock.patch.object(xy, "api_test_get_test", fake_get_test), \

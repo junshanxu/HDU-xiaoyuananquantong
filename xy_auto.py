@@ -47,12 +47,16 @@ _SENSITIVE_PARAMS = ("ah", "userId", "collegeId")
 
 
 def _sanitize(text):
-    """抹掉字符串中的 ah=/userId= 等敏感参数值，避免 token 经 SSE 日志泄露。"""
+    """抹掉字符串中的 ah=/userId= 等敏感参数值，避免 token 经 SSE 日志泄露。
+
+    同时覆盖 URL 形式（ah=xxx）与 JSON 形式（"ah":"xxx"）。
+    """
     if not text:
         return text
     out = str(text)
     for key in _SENSITIVE_PARAMS:
-        out = re.sub(rf"\b{key}\s*[=:]\s*[^\s&'\"]+", f"{key}=***", out, flags=re.IGNORECASE)
+        # 分隔符前后允许引号，兼容 ah=xxx、"ah":"xxx"、ah: "xxx" 等形式。
+        out = re.sub(rf"\b{key}[\"']?\s*[=:]\s*[\"']?[^\s&'\"]+", f"{key}=***", out, flags=re.IGNORECASE)
     return out
 
 
@@ -250,8 +254,9 @@ def solve(questions, bank):
     answers, miss = {}, 0
     for q in questions:
         key = norm(q["question"])
-        if key in bank and bank[key].get("answer"):
-            answers[q["id"]] = bank[key]["answer"]
+        entry = bank.get(key)
+        if isinstance(entry, dict) and entry.get("answer"):
+            answers[q["id"]] = entry["answer"]
         else:
             answers[q["id"]] = guess(q)
             miss += 1
@@ -264,13 +269,19 @@ def learn_from_wrong(s, cfg, log_id, bank):
         return 0
     data = api_wrong_list(s, cfg, log_id)
     resp = data.get("data") or {}
+    if not isinstance(resp, dict):
+        return 0
+    items = resp.get("data") or []
+    if not isinstance(items, list):
+        return 0
     learned = 0
-    for item in (resp.get("data") or []):
-        q = item.get("question") or {}
+    for item in items:
+        q = item.get("question") or {} if isinstance(item, dict) else {}
         ans = (q.get("answer", "") or "").replace(",", "")  # 多选 "A,C,D," -> "ACD"
         if ans and q.get("question"):
             key = norm(q["question"])
-            if bank.get(key, {}).get("answer") != ans:
+            entry = bank.get(key)
+            if not (isinstance(entry, dict) and entry.get("answer") == ans):
                 bank[key] = {"answer": ans, "quesType": q.get("quesType", "")}
                 learned += 1
     return learned
@@ -536,7 +547,7 @@ def run_courses(s, cfg, bank):
         if _cancelled(cfg):
             break
 
-    print(f"\n==================== 结束 ====================")
+    print("\n==================== 结束 ====================")
     print(f"通过 {total_done}  跳过课程 {total_course_skip}  跳过文章 {total_skip}  失败 {total_fail}")
     print(f"题库现有 {len(bank)} 题，可备份复用: {BANK_FILE}")
     return total_done, total_skip, total_fail

@@ -100,6 +100,49 @@ class PhaseOneTests(unittest.TestCase):
         self.assertIn("异常 1 次", result)
         self.assertNotIn("ah=", result)
 
+    def test_solve_tolerates_malformed_bank_entries(self):
+        """题库条目为字符串/空对象时不应崩溃，应视为未命中并回退猜测。"""
+        q = {
+            "id": "q1",
+            "question": "测试题",
+            "quesType": "单选",
+            "optionA": "选项 A",
+        }
+        bank = {"测试题": "A"}  # 旧格式：纯字符串值
+
+        answers, miss = xy.solve([q], bank)
+
+        self.assertEqual(answers["q1"], "A")  # 回退到默认猜测（单选猜 A）
+        self.assertEqual(miss, 1)
+
+    def test_learn_from_wrong_tolerates_unexpected_shapes(self):
+        """错题接口返回空 data / data 非对象 / 列表非列表时不应崩溃。"""
+        session = object()
+        cfg = make_cfg()
+        bank = {}
+
+        for payload in ({}, {"data": None}, {"data": []}, {"data": "x"}):
+            with mock.patch.object(xy, "api_wrong_list", return_value={"code": 200, "data": payload}):
+                self.assertEqual(xy.learn_from_wrong(session, cfg, "log-1", bank), 0)
+
+        self.assertEqual(bank, {})
+
+    def test_sanitize_masks_url_and_json_forms(self):
+        """ah/userId 以 URL 或 JSON 形式出现时都必须被脱敏，且不影响其他文本。"""
+        token = "f68790163b904c61469043d5c9a218fd"
+        url_form = f"错误：ah={token}&userId=2077304038830931969 请重试"
+        json_form = f'{{"code":500,"params":{{"ah":"{token}","userId":"2077304038830931969"}}}}'
+
+        out = xy._sanitize(url_form)
+        self.assertNotIn(token, out)
+        self.assertNotIn("2077304038830931969", out)
+        self.assertIn("ah=***", out)
+        self.assertIn("请重试", out)
+
+        out = xy._sanitize(json_form)
+        self.assertNotIn(token, out)
+        self.assertNotIn("2077304038830931969", out)
+
 
 if __name__ == "__main__":
     unittest.main()
