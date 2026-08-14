@@ -14,6 +14,7 @@ import queue
 import re
 import sys
 import threading
+import time
 import uuid
 import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,7 +37,11 @@ TASK_RETENTION_SECONDS = 10 * 60
 
 
 class RequestBodyTooLarge(ValueError):
-    """请求体超过本地 API 可接受的上限。"""
+    """请求体超过本地 API 可接受的上限；length 为声明的未读字节数。"""
+
+    def __init__(self, length):
+        super().__init__("request body too large")
+        self.length = length
 
 
 def cleanup_task(task_id, expected_task):
@@ -53,12 +58,11 @@ def schedule_task_cleanup(task_id, task):
 
 
 class Cfg:
-    """模拟 argparse 的 cfg 对象，供 xy_auto 函数使用"""
+    """xy_auto 的配置对象，供后台任务使用"""
     def __init__(self, **kw):
         defaults = dict(
             user_id="", college_id="", ah="", course_type="1", exam_class="10",
-            course_id=None, force=False, dry_run=False, delay=0.5,
-            max_retry=10, retry_exam=False, max_exam_retry=30,
+            delay=0.5, max_retry=10, retry_exam=False, max_exam_retry=30,
             cancel_event=None,
         )
         defaults.update(kw)
@@ -123,23 +127,27 @@ def set_failure(task, kind, message):
 
 
 def existing_certificate_status(s, cfg):
-    """正式考试机会用尽时，优先判断已有证书，避免再扫描课程。"""
+    """读取正式考试状态，并返回响应供后续考试流程复用。"""
     info = xy.api_test_get_test(s, cfg, "2")
     if info.get("code") != 200:
         message = str(info.get("message") or "平台暂时无法读取考试状态")
         # 平台耗尽次数时并不总是返回 lastNum=0；有时直接以错误文本返回。
         if "考试次数已使用完毕" in message:
-            return ("certificate", "") if xy.load_certificate_image(s, cfg) else ("exhausted", "考试次数已用完，且未查询到合格证书")
+            if xy.load_certificate_image(s, cfg):
+                return "certificate", "", None
+            return "exhausted", "考试次数已用完，且未查询到合格证书", None
         if "303" in message or "登录" in message or "token" in message.lower():
-            return "token_expired", "链接已失效，请重新从杭电安全教育页面复制完整链接"
-        return "platform_error", message
+            return "token_expired", "链接已失效，请重新从杭电安全教育页面复制完整链接", None
+        return "platform_error", message, None
     data = info.get("data") or {}
     last_num = xy._to_int(data.get("lastNum", 0) or 0, default=None)
     if last_num is None:
-        return "platform_error", "平台返回的考试状态无效，请稍后重试"
+        return "platform_error", "平台返回的考试状态无效，请稍后重试", None
     if last_num > 0:
-        return "ready", ""
-    return ("certificate", "") if xy.load_certificate_image(s, cfg) else ("exhausted", "考试次数已用完，且未查询到合格证书")
+        return "ready", "", info
+    if xy.load_certificate_image(s, cfg):
+        return "certificate", "", None
+    return "exhausted", "考试次数已用完，且未查询到合格证书", None
 
 
 def run_task(task_id, cfg):
@@ -148,13 +156,14 @@ def run_task(task_id, cfg):
     q = t["queue"]
     writer = QueueWriter(q)
     s = xy.Session()
+    started = time.perf_counter()
     bank = xy.load_bank()
     t["status"] = "running"
     old = sys.stdout
     sys.stdout = writer
     try:
         q.put(f"题库已加载 {len(bank)} 题")
-        exam_status, message = existing_certificate_status(s, cfg)
+        exam_status, message, exam_info = existing_certificate_status(s, cfg)
         if exam_status == "certificate":
             set_certificate_result(task_id, t, cfg)
             q.put("[✓] 考试次数已用完，已直接查询到合格证书")
@@ -171,18 +180,16 @@ def run_task(task_id, cfg):
                 set_failure(t, "chapter_incomplete", "仍有章节未完成，请稍后重新粘贴链接继续")
                 t["status"] = "failed"
             elif not cfg.cancel_event.is_set():
-                q.put("步骤 2/3：加载杭电内置题库")
-                if t["status"] == "running" and not cfg.cancel_event.is_set():
-                    q.put("步骤 3/3：参加正式考试并获取证书")
-                    ok = xy.do_exam(s, cfg, bank, "2")
-                    q.put(f"一键答题结果: {'✅ 已通过' if ok else '❌ 未通过'}")
-                    if ok:
-                        set_certificate_result(task_id, t, cfg)
-                        if t["certificate"]:
-                            q.put("证书已生成，可在页面中打开或保存")
-                    if not ok:
-                        set_failure(t, "exam_failed", "本次未能获得证书；请查看运行记录后再重试")
-                        t["status"] = "failed"
+                q.put("步骤 2/3：参加正式考试并获取证书")
+                ok = xy.do_exam(s, cfg, bank, "2", test_info=exam_info)
+                q.put(f"一键答题结果: {'✅ 已通过' if ok else '❌ 未通过'}")
+                if ok:
+                    set_certificate_result(task_id, t, cfg)
+                    if t["certificate"]:
+                        q.put("证书已生成，可在页面中打开或保存")
+                else:
+                    set_failure(t, "exam_failed", "本次未能获得证书；请查看运行记录后再重试")
+                    t["status"] = "failed"
         if cfg.cancel_event.is_set():
             t["status"] = "stopped"
         elif t["status"] == "running":
@@ -191,6 +198,8 @@ def run_task(task_id, cfg):
         t["status"] = "error"
         q.put(f"[错误] {e}")
     finally:
+        for line in xy.format_request_stats(s, (time.perf_counter() - started) * 1000).splitlines():
+            q.put(line)
         sys.stdout = old
         q.put(None)  # 结束信号
         schedule_task_cleanup(task_id, t)
@@ -234,8 +243,6 @@ def parse_params(url):
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 result[key] = match.group(1)
-    # 本项目只服务杭州电子科技大学，学校参数固定，不要求链接携带。
-    result["collegeId"] = xy.DEFAULT_COLLEGE_ID
     return result
 
 
@@ -261,7 +268,7 @@ class Handler(BaseHTTPRequestHandler):
         if n < 0:
             raise ValueError("无效 Content-Length")
         if n > MAX_JSON_BODY_BYTES:
-            raise RequestBodyTooLarge()
+            raise RequestBodyTooLarge(n)
         if not n:
             return {}
         data = self.rfile.read(n)
@@ -303,7 +310,20 @@ class Handler(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         try:
             body = self._read_body()
-        except RequestBodyTooLarge:
+        except RequestBodyTooLarge as exc:
+            # 未读的请求体不能当作下一条请求解析。直接关闭会因接收缓冲
+            # 残留数据触发 TCP RST，可能吞掉本应发出的 413 响应；
+            # 因此先尽量排空（设上限防止恶意客户端只发头不发体），再关闭连接。
+            remaining = min(exc.length, 64 * 1024)
+            try:
+                while remaining > 0:
+                    chunk = self.rfile.read(min(remaining, 8192))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+            except OSError:
+                pass
+            self.close_connection = True
             return self._send_json(413, {"error": "JSON 请求体不能超过 16 KB"})
         except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
             return self._send_json(400, {"error": "无效 JSON"})
@@ -341,7 +361,6 @@ class Handler(BaseHTTPRequestHandler):
         cancel_event = threading.Event()
         cfg = Cfg(
             user_id=user_id, college_id=college_id, ah=ah,
-            force=False,
             retry_exam=True,
             max_retry=max_retry,
             max_exam_retry=max_exam_retry,
@@ -405,6 +424,9 @@ class Handler(BaseHTTPRequestHandler):
                         self.wfile.write(f"event: outcome\ndata: {data}\n\n".encode("utf-8"))
                     self.wfile.write(f"event: done\ndata: {t['status']}\n\n".encode("utf-8"))
                     self.wfile.flush()
+                    # 流已结束，主动关闭连接：SSE 无 Content-Length，
+                    # 不关闭会让读到 EOF 为止的客户端（curl 等）永久挂起。
+                    self.close_connection = True
                     break
                 self.wfile.write(f"data: {line}\n\n".encode("utf-8"))
                 self.wfile.flush()
