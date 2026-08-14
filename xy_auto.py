@@ -61,6 +61,8 @@ class Session:
         cj = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(cj))
+        # 只记录接口路径和耗时，不记录 URL 参数，避免把 ah/userId 带进日志。
+        self.timings = []
         self.opener.addheaders = [
             ("User-Agent", UA),
             ("X-Requested-With", "XMLHttpRequest"),
@@ -68,10 +70,14 @@ class Session:
         ]
 
     def _open(self, req):
+        started = time.perf_counter()
+        path = urllib.parse.urlsplit(req.full_url).path or "/"
+        status = "ok"
         try:
             with self.opener.open(req, timeout=25) as r:
                 return json.loads(r.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as e:
+            status = f"http_{e.code}"
             body = ""
             try:
                 body = e.read().decode("utf-8", "replace")[:300]
@@ -79,7 +85,14 @@ class Session:
                 pass
             return {"code": e.code, "message": _sanitize(f"HTTP {e.code}: {body}")}
         except Exception as e:
+            status = "error"
             return {"code": -1, "message": _sanitize(str(e))}
+        finally:
+            self.timings.append({
+                "path": path,
+                "status": status,
+                "elapsed_ms": (time.perf_counter() - started) * 1000,
+            })
 
     def get(self, url, params=None):
         if params:
@@ -126,6 +139,35 @@ def save_bank(bank):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(bank, f, ensure_ascii=False, indent=2)
     os.replace(tmp, BANK_FILE)
+
+
+def format_request_stats(session, wall_elapsed_ms=None):
+    """格式化本次任务的接口耗时摘要；只输出路径，不输出敏感参数。"""
+    timings = getattr(session, "timings", [])
+    if not timings:
+        return "请求统计：0 次"
+
+    grouped = {}
+    for item in timings:
+        key = item["path"]
+        group = grouped.setdefault(key, {"count": 0, "elapsed_ms": 0.0, "max_ms": 0.0, "errors": 0})
+        group["count"] += 1
+        group["elapsed_ms"] += item["elapsed_ms"]
+        group["max_ms"] = max(group["max_ms"], item["elapsed_ms"])
+        if item["status"] != "ok":
+            group["errors"] += 1
+
+    total_ms = sum(item["elapsed_ms"] for item in timings)
+    suffix = f"，任务耗时约 {wall_elapsed_ms:.0f} ms" if wall_elapsed_ms is not None else ""
+    lines = [f"请求统计：{len(timings)} 次，接口耗时合计 {total_ms:.0f} ms{suffix}"]
+    # 按累计耗时排序，优先暴露真正值得优化的接口。
+    for path, group in sorted(grouped.items(), key=lambda pair: pair[1]["elapsed_ms"], reverse=True):
+        error_suffix = f"，异常 {group['errors']} 次" if group["errors"] else ""
+        lines.append(
+            f"  {path}: {group['count']} 次，合计 {group['elapsed_ms']:.0f} ms，"
+            f"平均 {group['elapsed_ms'] / group['count']:.0f} ms，最长 {group['max_ms']:.0f} ms{error_suffix}"
+        )
+    return "\n".join(lines)
 
 
 # ==================== 业务接口 ====================
@@ -240,7 +282,7 @@ def _cancelled(cfg):
 
 
 def _pause(cfg):
-    """可被 Web 停止按钮打断的请求间隔；CLI 下保持原行为。"""
+    """可被 Web 停止按钮打断的请求间隔。"""
     event = getattr(cfg, "cancel_event", None)
     if event:
         event.wait(cfg.delay)
@@ -250,19 +292,6 @@ def _pause(cfg):
 
 def do_article(s, cfg, bank, article_id, title):
     print(f"\n  ▸ 文章[{title}]  id={article_id}")
-
-    if cfg.dry_run:
-        qdata = api_question_list(s, cfg, article_id)
-        qs = (qdata.get("data") or {}).get("list") or []
-        print(f"    (dry-run) 共 {len(qs)} 题，不提交")
-        for i, q in enumerate(qs, 1):
-            bank_ans = bank.get(norm(q["question"]), {}).get("answer", "—")
-            print(f"      {i}.[{q.get('quesType')}] {q['question']}")
-            for c in "ABCDEF":
-                if q.get(f"option{c}"):
-                    mark = "  <-- 题库" if bank_ans == c else ""
-                    print(f"         {c}. {q[f'option{c}']}{mark}")
-        return True
 
     for attempt in range(1, cfg.max_retry + 1):
         if _cancelled(cfg):
@@ -287,7 +316,7 @@ def do_article(s, cfg, bank, article_id, title):
             msg = result.get("message") or result
             print(f"    [!] 提交异常: {msg}")
             if "303" in str(msg) or "登录" in str(msg) or result.get("code") == 303:
-                print("    [!] ah/token 可能已过期，请重新登录获取新 ah 后用 --ah 传入")
+                print("    [!] ah/token 可能已过期，请重新从平台复制完整链接")
             return False
 
         d = result.get("data") or {}
@@ -372,8 +401,9 @@ def _extract_questions(data):
     return lst or []
 
 
-def do_exam(s, cfg, bank, exam_type):
-    info = api_test_get_test(s, cfg, exam_type)
+def do_exam(s, cfg, bank, exam_type, test_info=None):
+    """参加考试；调用方已查询考试状态时可传入 test_info，避免重复请求。"""
+    info = test_info if test_info is not None else api_test_get_test(s, cfg, exam_type)
     if info.get("code") != 200:
         print(f"获取考试信息失败: {info.get('message') or info}")
         return False
@@ -390,11 +420,8 @@ def do_exam(s, cfg, bank, exam_type):
             return True
         print("    [!] 考试次数已用完，且未查询到合格证书")
         return False
-    if cfg.dry_run:
-        print("    (dry-run) 不创建考卷、不提交")
-        return True
 
-    # 模拟考默认允许重试刷题；正式考默认只考1次，需 --retry-exam 才自动重考
+    # 模拟考默认允许重试刷题；正式考由 retry_exam 控制是否自动重考
     is_mock = "模拟" in name
     allow_retry = cfg.retry_exam or is_mock
     max_try = min(last_num, cfg.max_exam_retry) if allow_retry else 1
@@ -460,23 +487,25 @@ def run_courses(s, cfg, bank):
     cl = api_course_list(s, cfg)
     if cl.get("code") != 200:
         print(f"\n获取课程列表失败: {cl.get('message') or cl}")
-        print("提示：ah/token 可能已过期，请重新登录 wap.xiaoyuananquantong.com，"
-              "从 URL 复制新的 ah 值后用 --ah 传入。")
+        print("提示：ah/token 可能已过期，请重新从平台复制完整链接。")
         return 0, 0, 1
     courses = cl.get("data") or []
     print(f"\n共 {len(courses)} 门课程")
 
-    only_ids = set(x.strip() for x in cfg.course_id.split(",")) if cfg.course_id else None
     total_done = total_skip = total_fail = 0
+    total_course_skip = 0
 
     for c in courses:
         if _cancelled(cfg):
             print("\n[停止] 已取消，不再处理后续课程")
             break
-        if only_ids and c["id"] not in only_ids:
-            continue
         flag = "已完成" if c.get("isFinsh") else "未完成"
         print(f"\n=== 课程: {c['name']}  (id={c['id']})  [{flag}] ===")
+
+        if c.get("isFinsh"):
+            print("  ▸ 课程已完成，跳过目录请求")
+            total_course_skip += 1
+            continue
 
         dl = api_directory_list(s, cfg, c["id"])
         if dl.get("code") != 200:
@@ -492,8 +521,8 @@ def run_courses(s, cfg, bank):
                     break
                 aid = art.get("id")
                 title = art.get("course", "")
-                if art.get("isFinsh") and not cfg.force:
-                    print(f"  ▸ [{title}] 已完成，跳过（--force 可重做）")
+                if art.get("isFinsh"):
+                    print(f"  ▸ [{title}] 已完成，跳过")
                     total_skip += 1
                     continue
                 ok = do_article(s, cfg, bank, aid, title)
@@ -508,6 +537,6 @@ def run_courses(s, cfg, bank):
             break
 
     print(f"\n==================== 结束 ====================")
-    print(f"通过 {total_done}  跳过 {total_skip}  失败 {total_fail}")
+    print(f"通过 {total_done}  跳过课程 {total_course_skip}  跳过文章 {total_skip}  失败 {total_fail}")
     print(f"题库现有 {len(bank)} 题，可备份复用: {BANK_FILE}")
     return total_done, total_skip, total_fail
