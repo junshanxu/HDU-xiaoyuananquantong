@@ -1,3 +1,6 @@
+
+</think>
+
 # 杭电保卫公众号-“研新·序章”始业教育自动答题。
 
 
@@ -20,6 +23,7 @@ npx skills add yuaiccc/HDU-xiaoyuananquantong --skill hdu-safety-answer
 ```bash
 git clone https://github.com/yuaiccc/HDU-xiaoyuananquantong.git
 cd HDU-xiaoyuananquantong
+python3 server.py
 ```
 
 ## 使用方法（以杭电为例，不知道其他学校题库情况）
