@@ -342,9 +342,9 @@ def do_article(s, cfg, bank, article_id, title):
         print(f"        本轮学到/更新 {learned} 题正确答案")
         if learned:
             save_bank(bank)
-        elif miss == 0:
-            # 题库全命中却仍错：可能多选/判断格式或匹配有误，避免空转
-            print("    [!] 题库已全命中但未通过，可能答案格式异常，停止该篇以排查")
+        else:
+            # 没学到新答案，重试只会提交相同答案，继续只会浪费请求。
+            print("    [!] 未学到新答案，重试无意义，停止该篇")
             return False
         _pause(cfg)
 
@@ -451,13 +451,20 @@ def do_exam(s, cfg, bank, exam_type, test_info=None):
         print(f"    考卷已创建 logId={log_id}  (本次消耗 1 次，剩 {last_num - attempt})")
 
         qdata = api_test_list(s, cfg, log_id)
+        for fetch_try in range(2):
+            if qdata.get("code") == 200:
+                break
+            print(f"    [!] 取题失败: {qdata.get('message') or qdata}（第 {fetch_try + 1}/3 次）")
+            _pause(cfg)
+            qdata = api_test_list(s, cfg, log_id)
         if qdata.get("code") != 200:
-            print(f"    [!] 取题失败: {qdata.get('message') or qdata}")
-            continue
+            # 不创建新考卷：每次 create 都会消耗一次考试机会。
+            print("    [!] 同一考卷多次取题失败，中止本次考试，不再消耗剩余次数")
+            return False
         questions = _extract_questions(qdata)
         if not questions:
-            print("    [!] 无题目，跳过")
-            continue
+            print("    [!] 该考卷无题目，中止本次考试，不再消耗剩余次数")
+            return False
         hit = sum(1 for q in questions if norm(q.get("question", "")) in bank)
         print(f"    共 {len(questions)} 题，题库命中 {hit} 题")
         answers, miss = solve(questions, bank)
@@ -480,6 +487,12 @@ def do_exam(s, cfg, bank, exam_type, test_info=None):
                 print(f"    合格证书 id: {cfg.certificate_id}")
                 if load_certificate_image(s, cfg):
                     print("    证书图片已读取，可在页面中保存")
+            if _to_int(err) > 0:
+                # 通过也有错题：顺手学习，让题库越用越准。
+                learned = learn_from_wrong(s, cfg, log_id, bank)
+                if learned:
+                    save_bank(bank)
+                    print(f"        通过后顺带学到/更新 {learned} 题正确答案")
             return True
         print(f"    [×] 未通过  得分 {score}  错题 {err}  -> 拉取错题学习")
         learned = learn_from_wrong(s, cfg, log_id, bank)

@@ -173,14 +173,14 @@ def run_task(task_id, cfg):
             set_failure(t, exam_status, message)
             t["status"] = "failed"
         else:
-            q.put("步骤 1/3：完成未完成的课程章节")
+            q.put("步骤 1/2：完成未完成的课程章节")
             _, _, failed = xy.run_courses(s, cfg, bank)
             if failed:
                 q.put("[!] 存在未完成的章节，已停止后续考试")
                 set_failure(t, "chapter_incomplete", "仍有章节未完成，请稍后重新粘贴链接继续")
                 t["status"] = "failed"
             elif not cfg.cancel_event.is_set():
-                q.put("步骤 2/3：参加正式考试并获取证书")
+                q.put("步骤 2/2：参加正式考试并获取证书")
                 ok = xy.do_exam(s, cfg, bank, "2", test_info=exam_info)
                 q.put(f"一键答题结果: {'✅ 已通过' if ok else '❌ 未通过'}")
                 if ok:

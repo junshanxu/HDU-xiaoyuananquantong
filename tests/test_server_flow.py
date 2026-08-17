@@ -171,8 +171,8 @@ class ServerFlowTests(unittest.TestCase):
 
             # 日志包含关键步骤与请求统计
             self.assertIn("题库已加载", raw)
-            self.assertIn("步骤 1/3", raw)
-            self.assertIn("步骤 2/3", raw)
+            self.assertIn("步骤 1/2", raw)
+            self.assertIn("步骤 2/2", raw)
             self.assertIn("一键答题结果: ✅ 已通过", raw)
             self.assertIn("请求统计", raw)
 

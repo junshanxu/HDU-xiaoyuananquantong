@@ -15,6 +15,7 @@ def make_cfg(**overrides):
         "college_id": "",
         "ah": "",
         "retry_exam": False,
+        "max_retry": 3,
         "max_exam_retry": 1,
         "exam_class": "10",
         "cancel_event": threading.Event(),
@@ -142,6 +143,74 @@ class PhaseOneTests(unittest.TestCase):
         out = xy._sanitize(json_form)
         self.assertNotIn(token, out)
         self.assertNotIn("2077304038830931969", out)
+
+    def test_do_article_stops_without_new_learning(self):
+        """提交失败且错题接口无新答案时，不应重复提交相同答案。"""
+        cfg = make_cfg(max_retry=10)
+        question = {"id": "q1", "question": "测试题", "quesType": "单选",
+                    "optionA": "选项 A", "optionB": "选项 B"}
+        with mock.patch.object(xy, "api_question_list",
+                               return_value={"code": 200, "data": {"list": [question]}}), \
+                mock.patch.object(xy, "api_unit_test",
+                                  return_value={"code": 200, "data": {"isSuccess": False, "num": 1, "logId": "log-1"}}) as submit, \
+                mock.patch.object(xy, "api_wrong_list",
+                                  return_value={"code": 200, "data": {"data": []}}), \
+                mock.patch.object(xy, "save_bank") as save, \
+                mock.patch.object(xy, "_pause"):
+            ok = xy.do_article(object(), cfg, {}, "a1", "文章 1")
+
+        self.assertFalse(ok)
+        self.assertEqual(submit.call_count, 1)  # 不再用相同答案空转
+        save.assert_not_called()  # 没学到答案时不应写题库文件
+
+    def test_do_exam_does_not_burn_attempts_on_fetch_failure(self):
+        """取题失败时只重试同一张考卷，不再创建新考卷消耗考试次数。"""
+        cfg = make_cfg(user_id="123456", ah="abcdefgh", retry_exam=True, max_exam_retry=5)
+        test_info = {"code": 200, "data": {"id": "exam-1", "name": "正式考试", "lastNum": 5}}
+        with mock.patch.object(xy, "api_test_create",
+                               return_value={"code": 200, "data": {"logId": "log-1"}}) as create, \
+                mock.patch.object(xy, "api_test_list",
+                                  return_value={"code": -1, "message": "网络错误"}), \
+                mock.patch.object(xy, "_pause"):
+            ok = xy.do_exam(object(), cfg, {}, "2", test_info=test_info)
+
+        self.assertFalse(ok)
+        self.assertEqual(create.call_count, 1)  # 只消耗 1 次机会，不继续烧
+
+    def test_do_exam_stops_on_empty_paper(self):
+        """考卷无题目时中止，不再创建新考卷。"""
+        cfg = make_cfg(user_id="123456", ah="abcdefgh", retry_exam=True, max_exam_retry=5)
+        test_info = {"code": 200, "data": {"id": "exam-1", "name": "正式考试", "lastNum": 5}}
+        with mock.patch.object(xy, "api_test_create",
+                               return_value={"code": 200, "data": {"logId": "log-1"}}) as create, \
+                mock.patch.object(xy, "api_test_list",
+                                  return_value={"code": 200, "data": {"data": []}}):
+            ok = xy.do_exam(object(), cfg, {}, "2", test_info=test_info)
+
+        self.assertFalse(ok)
+        self.assertEqual(create.call_count, 1)
+
+    def test_do_exam_learns_missed_answers_on_pass(self):
+        """考试通过但仍有错题时，也顺手学习正确答案扩充题库。"""
+        cfg = make_cfg(user_id="123456", ah="abcdefgh")
+        question = {"id": "q1", "question": "测试判断题", "quesType": "判断"}
+        test_info = {"code": 200, "data": {"id": "exam-1", "name": "正式考试", "lastNum": 1}}
+        bank = {}
+        with mock.patch.object(xy, "api_test_create",
+                               return_value={"code": 200, "data": {"logId": "log-1"}}), \
+                mock.patch.object(xy, "api_test_list",
+                                  return_value={"code": 200, "data": {"data": [{"question": question}]}}), \
+                mock.patch.object(xy, "api_imitate_test",
+                                  return_value={"code": 200, "data": {"isSuccess": True, "count": 98, "num": 1}}), \
+                mock.patch.object(xy, "api_wrong_list",
+                                  return_value={"code": 200, "data": {"data": [
+                                      {"question": {"question": "测试判断题", "answer": "0", "quesType": "3"}}]}}), \
+                mock.patch.object(xy, "save_bank") as save:  # 防止测试数据写入真实题库文件
+            ok = xy.do_exam(object(), cfg, bank, "2", test_info=test_info)
+
+        self.assertTrue(ok)
+        self.assertEqual(bank.get("测试判断题", {}).get("answer"), "0")
+        save.assert_called_once_with(bank)
 
 
 if __name__ == "__main__":
