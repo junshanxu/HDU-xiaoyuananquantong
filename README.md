@@ -32,10 +32,13 @@ irm https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/instal
 1. 在「杭电保卫」公众号中进入「服务师生 → 新生安全 → 学习课程」。
 2. 在浏览器菜单中选择「复制链接」。
 3. 把链接粘贴到工具网页，点击「开始答题并获取证书」。
+4. 完成后登录「杭电研究生-i学工」一站式平台，在「安全教育」中上传 APP 下载截图、家长学生签名截图和考核通过截图，最后点击「提交」。
 
 ![一键答题界面](docs/images/web-home.png)
 
 ![复制平台链接](docs/images/copy-link.png)
+
+![一站式平台上传截图](docs/images/one-stop-upload.png)
 
 工具会跳过已完成课程，完成剩余章节和考试，并展示证书。`ah` 过期时，重新登录平台并复制链接即可。
 
