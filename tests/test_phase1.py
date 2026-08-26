@@ -163,6 +163,23 @@ class PhaseOneTests(unittest.TestCase):
         self.assertEqual(submit.call_count, 1)  # 不再用相同答案空转
         save.assert_not_called()  # 没学到答案时不应写题库文件
 
+    def test_do_article_skips_wrong_api_when_bank_covers_question(self):
+        """内置题库已覆盖题目时，提交失败也不再请求错题接口。"""
+        cfg = make_cfg(max_retry=10)
+        question = {"id": "q1", "question": "测试题", "quesType": "单选",
+                    "optionA": "选项 A", "optionB": "选项 B"}
+        bank = {"测试题": {"answer": "A"}}
+        with mock.patch.object(xy, "api_question_list",
+                               return_value={"code": 200, "data": {"list": [question]}}), \
+                mock.patch.object(xy, "api_unit_test",
+                                  return_value={"code": 200, "data": {"isSuccess": False, "num": 1, "logId": "log-1"}}), \
+                mock.patch.object(xy, "api_wrong_list") as wrong_list, \
+                mock.patch.object(xy, "_pause"):
+            ok = xy.do_article(object(), cfg, bank, "a1", "文章 1")
+
+        self.assertFalse(ok)
+        wrong_list.assert_not_called()
+
     def test_do_exam_does_not_burn_attempts_on_fetch_failure(self):
         """取题失败时只重试同一张考卷，不再创建新考卷消耗考试次数。"""
         cfg = make_cfg(user_id="123456", ah="abcdefgh", retry_exam=True, max_exam_retry=5)
@@ -211,6 +228,24 @@ class PhaseOneTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(bank.get("测试判断题", {}).get("answer"), "0")
         save.assert_called_once_with(bank)
+
+    def test_do_exam_skips_wrong_api_when_bank_covers_paper(self):
+        """内置题库已覆盖整张试卷时，通过后不再请求错题接口。"""
+        cfg = make_cfg(user_id="123456", ah="abcdefgh")
+        question = {"id": "q1", "question": "测试判断题", "quesType": "判断"}
+        test_info = {"code": 200, "data": {"id": "exam-1", "name": "正式考试", "lastNum": 1}}
+        bank = {"测试判断题": {"answer": "1"}}
+        with mock.patch.object(xy, "api_test_create",
+                               return_value={"code": 200, "data": {"logId": "log-1"}}), \
+                mock.patch.object(xy, "api_test_list",
+                                  return_value={"code": 200, "data": {"data": [{"question": question}]}}), \
+                mock.patch.object(xy, "api_imitate_test",
+                                  return_value={"code": 200, "data": {"isSuccess": True, "count": 98, "num": 1}}), \
+                mock.patch.object(xy, "api_wrong_list") as wrong_list:
+            ok = xy.do_exam(object(), cfg, bank, "2", test_info=test_info)
+
+        self.assertTrue(ok)
+        wrong_list.assert_not_called()
 
 
 if __name__ == "__main__":

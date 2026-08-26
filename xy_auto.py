@@ -8,7 +8,7 @@
   2. POST /wap/directory/list    获取章节/文章目录       -> articleId, title
   3. GET  /wap/question/list     获取题目               -> questionId, 选项, 题型
   4. POST /wap/unitTest          提交答案
-  5. GET  /wap/wrong/list        获取错题(含正确答案)    -> 自动学习并重试
+  5. GET  /wap/wrong/list        仅在题库未命中时作为兜底学习
 
 提交格式（复刻页面 setVle/serialize 逻辑）：
   单选 : question={qid}-{字母}            例 165xxx-A
@@ -337,7 +337,11 @@ def do_article(s, cfg, bank, article_id, title):
 
         err = d.get("num", "?")
         log_id = d.get("logId", "")
-        print(f"    [×] 第 {attempt} 次未通过，错 {err} 题，未命中 {miss} 题 → 拉取错题学习")
+        next_step = "拉取错题学习" if miss else "停止并保留内置题库"
+        print(f"    [×] 第 {attempt} 次未通过，错 {err} 题，未命中 {miss} 题 → {next_step}")
+        if not miss:
+            print("    [!] 内置题库已覆盖本题，停止，不再请求错题接口")
+            return False
         learned = learn_from_wrong(s, cfg, log_id, bank)
         print(f"        本轮学到/更新 {learned} 题正确答案")
         if learned:
@@ -488,13 +492,20 @@ def do_exam(s, cfg, bank, exam_type, test_info=None):
                 if load_certificate_image(s, cfg):
                     print("    证书图片已读取，可在页面中保存")
             if _to_int(err) > 0:
-                # 通过也有错题：顺手学习，让题库越用越准。
-                learned = learn_from_wrong(s, cfg, log_id, bank)
-                if learned:
-                    save_bank(bank)
-                    print(f"        通过后顺带学到/更新 {learned} 题正确答案")
+                # 仅在本卷有未命中题目时，才用错题接口作为兜底学习。
+                if miss:
+                    learned = learn_from_wrong(s, cfg, log_id, bank)
+                    if learned:
+                        save_bank(bank)
+                        print(f"        通过后顺带学到/更新 {learned} 题正确答案")
+                else:
+                    print("        内置题库已覆盖本卷，不再请求错题接口")
             return True
-        print(f"    [×] 未通过  得分 {score}  错题 {err}  -> 拉取错题学习")
+        next_step = "拉取错题学习" if miss else "停止并保留内置题库"
+        print(f"    [×] 未通过  得分 {score}  错题 {err}  -> {next_step}")
+        if not miss:
+            print("    [!] 内置题库已覆盖本卷，停止，不再请求错题接口")
+            return False
         learned = learn_from_wrong(s, cfg, log_id, bank)
         print(f"        本轮学到/更新 {learned} 题正确答案")
         if learned:
