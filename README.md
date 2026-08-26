@@ -2,14 +2,14 @@
 
 ## 最简单的用法
 
-把本仓库链接丢给 **Claude Code** 或 **Codex**，发送：
+把下面的 prompt 丢给 **Claude Code** 或 **Codex**：
 
 ```text
 帮我安装并运行这个项目，完成后打开本地网页：
 https://github.com/yuaiccc/HDU-xiaoyuananquantong
 ```
 
-> 只需把仓库链接发给 Agent。平台登录链接和 `ah` token 请勿发到聊天中，在打开的本地网页里粘贴即可。
+
 
 ## 直接运行
 
@@ -25,7 +25,7 @@ Windows PowerShell：
 irm https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.ps1 | iex
 ```
 
-服务只在 `127.0.0.1` 本地运行，不会持久化保存 `ah` token。
+
 
 ## 使用
 
