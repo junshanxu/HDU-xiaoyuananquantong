@@ -13,16 +13,16 @@ https://github.com/yuaiccc/HDU-xiaoyuananquantong
 
 ## 直接运行
 
-macOS / Linux：
+Windows CMD（无需安装 Git 或 PowerShell）：
+
+```bat
+curl.exe -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.cmd -o "%TEMP%\hdu-install.cmd" && call "%TEMP%\hdu-install.cmd"
+```
+
+macOS / Linux / Windows Git Bash：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.sh | bash
-```
-
-Windows PowerShell：
-
-```powershell
-irm https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.ps1 | iex
 ```
 
 
