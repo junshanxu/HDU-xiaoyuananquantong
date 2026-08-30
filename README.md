@@ -1,5 +1,7 @@
 # 杭电保卫公众号「研新·序章」始业教育自动答题工具
 
+[![CI](https://github.com/yuaiccc/HDU-xiaoyuananquantong/actions/workflows/ci.yml/badge.svg)](https://github.com/yuaiccc/HDU-xiaoyuananquantong/actions/workflows/ci.yml)
+
 ## 最简单的用法
 
 把下面的 prompt 丢给 **Claude Code** 或 **Codex**：
