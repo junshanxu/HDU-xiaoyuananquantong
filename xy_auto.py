@@ -24,6 +24,7 @@ import http.cookiejar
 import json
 import os
 import re
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -39,6 +40,21 @@ UA = ("Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 "
 
 # question/list 用中文题型，提交用数字，两套编码
 QTYPE_CN2NUM = {"单选": "1", "多选": "2", "判断": "3"}
+
+
+def _configure_stdio_encoding():
+    """让 Windows 控制台也能稳定输出中文和进度符号。"""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, OSError):
+                # 被测试重定向或宿主环境不支持时，保留原输出流。
+                pass
+
+
+_configure_stdio_encoding()
 
 
 # ==================== HTTP Session ====================
