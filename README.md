@@ -4,7 +4,7 @@
 
 ## 最简单的用法
 
-把下面的 prompt 丢给 **Claude Code** 或 **Codex**：
+把下面的 prompt 丢给 **Claude Code** 、 **Codex** 或者  **Workbuddy**：
 
 ```text
 帮我安装并运行这个项目，完成后打开本地网页：
