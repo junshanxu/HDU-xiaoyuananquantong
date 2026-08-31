@@ -1,6 +1,6 @@
-# 杭电保卫公众号「研新·序章」始业教育答题工具
+# 2026杭电保卫公众号「研新·序章」始业教育答题工具 
 
-[![CI](https://github.com/yuaiccc/HDU-xiaoyuananquantong/actions/workflows/ci.yml/badge.svg)](https://github.com/yuaiccc/HDU-xiaoyuananquantong/actions/workflows/ci.yml)
+##根据学校通知：新生安全教育学习时间推迟到9月9日，考试次数增加了3次
 
 ## 最简单的用法
 
