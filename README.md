@@ -13,22 +13,6 @@ https://github.com/yuaiccc/HDU-xiaoyuananquantong
 
 
 
-## 直接运行
-
-Windows：
-
-```bat
-curl.exe -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.cmd -o "%TEMP%\hdu-install.cmd" && call "%TEMP%\hdu-install.cmd"
-```
-
-macOS / Linux ：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/yuaiccc/HDU-xiaoyuananquantong/main/install.sh | bash
-```
-
-
-
 ## 使用
 
 1. 在「杭电保卫」公众号中进入「服务师生 → 新生安全 → 学习课程」。
